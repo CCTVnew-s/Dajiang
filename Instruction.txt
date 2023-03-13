@@ -1,0 +1,16 @@
+## Need to define the flow and reactions
+### Refactor Upload -- Start
+### Client -- ready signal
+### Refactor Display
+### Client -- receive, signal next
+### Refactor next
+### Client -- not good, signal pause
+### ..... repeat
+### Refactor nothing left --- End ----
+## PARALLEL --- Both need to be ready
+### Client --- saving all stuff, ready signal
+### Refactor Ready, since might need to upload
+### Refactor --- dispaly next
+##......
+#### Better keep upload as a seperate thread, not in the reaction chain
+### meanwhile, need to keep the process alive,,, keys as well as mouse actions
