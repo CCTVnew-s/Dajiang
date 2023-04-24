@@ -1,0 +1,407 @@
+// migrate previous feature to current data settings
+
+expwjf:{[f;args;newname] 
+         (enlist f),args, newname};
+
+applyf1:{[f;cateory;side]
+          {[f;x;catelabel;sidelabel;cate;side;name]
+            loc: (catelabel in cate ) and (sidelabel in side);
+            x: x where loc; :f[x]}[f;;;;cateory;side;]};
+
+applyf2:{[f;cateory;side]
+          {[f;x;y;catelabel;sidelabel;cate;side;name]
+            loc: (catelabel in cate ) and (sidelabel in side);
+            x: x where loc; y: y where loc;
+             :f[x;y]}[f;;;;;cateory;side;]};
+
+applyf3:{[f;cateory;side]
+          {[f;x;y;z;catelabel;sidelabel;groupids;name]
+            loc: (catelabel in groupids`cate) and (sidelabel in groupids`side);
+            x: x where loc; y: y where loc; z: z where loc;
+             :f[x;y;z]}[f;;;;;;`cate`side!(cateory;side);]};
+
+applyf1group1:{[f;groupval]
+          {[f;x;grouplabel;groupval;name]
+            loc: (grouplabel in groupval);
+            x: x where loc;
+             :f[x]}[f;;;groupval;]};
+
+applyf2group1:{[f;groupval]
+          {[f;x;y;grouplabel;groupval;name]
+            loc: (grouplabel in groupval);
+            x: x where loc; y: y where loc; 
+             :f[x;y]}[f;;;;groupval;]};
+
+applyf3group1:{[f;groupval]
+          {[f;x;y;z;grouplabel;groupval;name]
+            loc: (grouplabel in groupval);
+            x: x where loc; y: y where loc; z: z where loc;
+             :f[x;y;z]}[f;;;;;groupval;]};
+
+applyf4group1:{[f;groupval]
+          {[f;x;y;z;v;grouplabel;groupval;name]
+            loc: (grouplabel in groupval);
+            x: x where loc; y: y where loc; z: z where loc; v: v where loc;
+             :f[x;y;z;v]}[f;;;;;;groupval;]};
+
+applyf1group0:{[f]
+          {[f;x;name]
+             :f[x]}[f;;]};
+
+applyf2group0:{[f]
+          {[f;x;y;name]
+             :f[x;y]}[f;;;]};
+
+applyf3group0:{[f]
+          {[f;x;y;z;name]
+             :f[x;y;z]}[f;;;;]};
+applyf4group0:{[f]
+          {[f;x;y;z;v;name]
+             :f[x;y;z;v]}[f;;;;;]};
+
+
+// I
+
+// sparse rules
+// simple stats
+basefeatureset1:{[groupkey;groupval;groupid]
+
+    ( expwjf[applyf1[sum;groupval;`b];`Quantity,groupkey,`Side;`$ (string groupid), "sumb"];
+      expwjf[applyf1[sum;groupval;`s];`Quantity,groupkey,`Side;`$ (string groupid), "sums"];
+      expwjf[applyf2[{?[0<count x;x wavg y;0nf]};groupval;`b];`Quantity`Price,groupkey,`Side;`$ (string groupid),"avgpb"];
+      expwjf[applyf2[{?[0<count x;x wavg y;0nf]};groupval;`s];`Quantity`Price,groupkey,`Side;`$ (string groupid),"avgps"];
+      expwjf[applyf1[{?[0<count x;min x;0nf]};groupval;`b];`Price,groupkey,`Side;`$ (string groupid),"minpxb"];
+      expwjf[applyf1[{?[0<count x;min x;0nf]};groupval;`s];`Price,groupkey,`Side;`$ (string groupid),"minpxs"];
+      expwjf[applyf1[{?[0<count x;max x;0nf]};groupval;`s];`Price,groupkey,`Side;`$ (string groupid),"maxpxs"];
+      expwjf[applyf1[{?[0<count x;max x;0nf]};groupval;`b];`Price,groupkey,`Side;`$ (string groupid),"maxpxb"];
+      expwjf[applyf1group1[{?[0<count x;last x;`]};groupval];`Side,groupkey;`$ (string groupid),"lastsd"];
+      expwjf[applyf1group1[{?[0<count x;last x;0nf]};groupval];`Price,groupkey;`$ (string groupid),"lastpx"])
+
+};
+// multiple stats
+// side account counts
+// b/s (only) account avg price , total quantity
+// tgtside: enlist `s
+accountsidestats:{[sidecol;accol;tgtside]
+            if[0 = count sidecol;:0i]; 
+            sum value  {[x;y] y ~ asc distinct x}[; tgtside] each sidecol group accol};
+
+// accountsidestats[ sidecol ;  accol; enlist `s]                 
+singlesideacountstats:{[accol;sidecol;qtycol;pricecol;tgtside]
+            if[0 = count accol; :(();())];
+            acstats: {[x;y] y ~ asc distinct x}[; tgtside] each sidecol group accol;
+            acs: asc where acstats;
+            qdic:qtycol group accol;
+            pdic: pricecol group accol;
+            stats: {[p;q;a] (sum q[a]; q[a] wavg p[a])}[pdic;qdic;] each acs;
+            :(enlist (@[;0] each stats)),(enlist (@[;1] each stats))
+
+};
+ 
+basefeatureset2:{[groupkey;groupval;groupid]
+
+    ( expwjf[applyf2group1[accountsidestats[;;enlist `b];groupval];`Side`Account,groupkey;`$ (string groupid), "nbacs"];
+      expwjf[applyf2group1[accountsidestats[;;enlist `s];groupval];`Side`Account,groupkey;`$ (string groupid), "nsacs"];   
+      expwjf[applyf2group1[accountsidestats[;;`b`s];groupval];`Side`Account,groupkey;`$ (string groupid), "nbsacs"];
+      expwjf[applyf4group1[singlesideacountstats[;;;;enlist `b];groupval];`Account`Side`Quantity`Price,groupkey;`$ (string groupid), "bacstats"];
+      expwjf[applyf4group1[singlesideacountstats[;;;;enlist `s];groupval];`Account`Side`Quantity`Price,groupkey;`$ (string groupid), "sacstats"]
+    )
+      
+};
+
+//pricecol: til 20
+// qty: 20#1
+// splitN:20
+// more granular
+priceqtl:{[price;qty;splitN]
+            qtyqtl: (1 + til splitN - 1) * (1.0%splitN) *  sum qty;
+            sortqty: qty iasc price;
+            reverse 1 _ fills reverse value (til splitN )#max each (asc price) group sum each (sums sortqty) >\: qtyqtl};
+//priceqtl[pricecol;qty;splitN]
+
+
+basefeatureset3:{[groupkey;groupval;groupid]
+
+    ( expwjf[applyf2[priceqtl[;;5];groupval;`b];`Price`Quantity,groupkey,`Side;`$ (string groupid), "bpxqtls"];
+      expwjf[applyf2[priceqtl[;;5];groupval;`s];`Price`Quantity,groupkey,`Side;`$ (string groupid), "spxqtls"]   
+    )
+      
+};
+
+// all
+basefeatureset4:{[groupid]
+
+    ( 
+      expwjf[applyf2group0[accountsidestats[;;enlist `b]];`Side`Account;`$ (string groupid), "nbacs"];
+      expwjf[applyf2group0[accountsidestats[;;enlist `s]];`Side`Account;`$ (string groupid), "nsacs"];   
+      expwjf[applyf2group0[accountsidestats[;;`b`s]];`Side`Account;`$ (string groupid), "nbsacs"];
+      expwjf[applyf4group0[singlesideacountstats[;;;;enlist `b]];`Account`Side`Quantity`Price;`$ (string groupid), "bacstats"];
+      expwjf[applyf4group0[singlesideacountstats[;;;;enlist `s]];`Account`Side`Quantity`Price;`$ (string groupid), "sacstats"];
+      expwjf[applyf2group1[priceqtl[;;5];`b];`Price`Quantity`Side;`$ (string groupid), "bpxqtls"];
+      expwjf[applyf2group1[priceqtl[;;5];`s];`Price`Quantity`Side;`$ (string groupid), "spxqtls"]  
+    )
+      
+};
+
+wjcalcbywindows:      basefeatureset1[`category;`tier0;`w20t0],
+                      basefeatureset1[`category;`tier1a;`w20t1],
+                      basefeatureset1[`category;`tier2q;`w20t2],
+                      basefeatureset2[`category;`tier2q;`w20t2],
+                      basefeatureset3[`category;`tier2q;`w20t2],
+                      basefeatureset1[`category;`tier3q;`w20t3],
+                      basefeatureset2[`category;`tier3q;`w20t3],
+                      basefeatureset3[`category;`tier3q;`w20t3],
+                      basefeatureset1[`category;`others;`w20rest],                
+                      basefeatureset2[`category;`others;`w20rest],
+                      basefeatureset3[`category;`others;`w20rest],
+                      basefeatureset1[`category;`tier0;`w40t0],
+                      basefeatureset1[`category;`tier1a;`w40t1],
+                      basefeatureset1[`category;`tier2q;`w40t2],
+                      basefeatureset2[`category;`tier2q;`w40t2],
+                      basefeatureset3[`category;`tier2q;`w40t2],
+                      basefeatureset1[`category;`tier3q;`w40t3],
+                      basefeatureset2[`category;`tier3q;`w40t3],
+                      basefeatureset3[`category;`tier3q;`w40t3],
+                      basefeatureset1[`category;`others;`w40rest],                
+                      basefeatureset2[`category;`others;`w40rest],
+                      basefeatureset3[`category;`others;`w40rest],
+                      basefeatureset1[`category;`tier0;`w60t0],
+                      basefeatureset1[`category;`tier1a;`w60t1],
+                      basefeatureset1[`category;`tier2q;`w60t2],
+                      basefeatureset2[`category;`tier2q;`w60t2],
+                      basefeatureset3[`category;`tier2q;`w60t2],
+                      basefeatureset1[`category;`tier3q;`w60t3],
+                      basefeatureset2[`category;`tier3q;`w60t3],
+                      basefeatureset3[`category;`tier3q;`w60t3],
+                      basefeatureset1[`category;`others;`w60rest],                
+                      basefeatureset2[`category;`others;`w60rest],
+                      basefeatureset3[`category;`others;`w60rest],
+                      basefeatureset1[`category;`tier0;`wallt0],
+                      basefeatureset1[`category;`tier1a;`wallt1],
+                      basefeatureset1[`category;`tier2q;`wallt2],
+                      basefeatureset2[`category;`tier2q;`wallt2],
+                      basefeatureset1[`category;`tier3q;`wallt3],
+                      basefeatureset2[`category;`tier3q;`wallt3],
+                      basefeatureset1[`category;`others;`wallrest],                
+                      basefeatureset2[`category;`others;`wallrest],
+                      basefeatureset3[`category;`others;`wallrest],
+                      basefeatureset4[`wallrest];
+
+wjwindef:`w20`w40`w60`wall!(20;40;60;0W);
+
+
+
+parsewjcaltomap:{[wjcalcbywindows;wjwindef]
+featurenames: last each wjcalcbywindows;
+wjw: last each (value wjwindef) where  each  flip featurenames like/: (string key wjwindef),\: "*" ;
+:featurenames! (enlist each wjcalcbywindows),' wjw};
+wjcalcmap: parsewjcaltomap[wjcalcbywindows;wjwindef];
+
+// 
+parallelwjatsym:{[X3d;X1d;wjfeature;wjcalcmap;symx]
+x3: `time xasc select from X3d where sym = symx;
+x1: `time xasc select  from X1d where sym = symx;
+if[0 = count x3;:()];
+wjcals: $[wjfeature~`;wjcalcmap;wjfeature#wjcalcmap];
+featuresbyw: (key wjcals) group last each value wjcals;
+rtn: {[x3;x1;wjcals;featuresbyw;w]
+ wj1[ $[w=0W; ((count x3)#0t;x3`time); (x3`time) +/: (neg w; 0) * 60 * 1000];
+      `time; x3; (enlist x1), first each wjcals[featuresbyw[w]]]}[x3;x1;wjcals;featuresbyw;] each key featuresbyw;
+:   {x lj `time xkey y} over rtn};
+
+
+accoutmap:()!();
+accoutmap[`major]:`C35831`C31448;
+accoutmap[`tier0]:enlist `C35766;
+accoutmap[`tier1a]: `C32042`C36987;
+accoutmap[`tier2q]: `C43244`C36022`C35848;
+accoutmap[`tier3q]: `C37208`C36379`C36380`C29168`C36146`C40120;
+
+reverseacmap: (raze value accoutmap)!  raze (count each value accoutmap) #' key accoutmap;
+
+
+
+
+fcalculatesignal:{[X3d;X1d;wjfeature;wjcalcmap]
+ X1d: update category: `others ^ reverseacmap Account from X1d;
+ t: (),/ parallelwjatsym[X3d;X1d;wjfeature;wjcalcmap;]   peach exec distinct sym from X3d;
+ :t
+};
+
+
+cleanX3:{[X3]
+ update time:`time$time, Side:  ?[Side = `$"1"; `b; `s], sym: .util.strclean each RIC from select from X3 where Price > 0, event = `Pending };
+
+cleanX1:{[X1]
+ update time:`time$time, Side:  ?[Side = `$"1"; `b; `s],sym: .util.strclean each RIC  from select from X1 where Price > 0 };
+
+
+calculatefeatureforday:{[data]
+    o1:data[0];o2:data[1];e1:data[2];hpro:data[3];hpre:data[4];
+    d: `date$@[first o1;`time];
+   0N!"working on date ",string d;
+  tgtframe: (select sym ,`time$time, Side, Account, OrderId, Price, Quantity from o1 where Account in tgtcrm, event=`Pending), (select sym,`time$time, Side, Account,OrderId, Price, Quantity from hpro where Account in tgtcrm, event=`Pending);
+   o1exec:   (select `time$time, sym,  Account, event, Price, Quantity, Side from e1 where  not Account in tgtcrm, event = `Executed), (select `time$time + 8t, sym, Account, event:`Executed, Price, Quantity, Side from hpre where not Account in tgtcrm);
+if[0 = count tgtframe;:()];
+featuredX3: fcalculatesignal[tgtframe;o1exec;`;wjcalcmap];
+: update date:d from featuredX3;
+}
+
+
+rtnorig : calculatefeatureforday each alldata;
+rtnorig : (),/ rtnorig ;
+
+significant: accoutmap[`tier2q],accoutmap[`tier3q];
+execessmap: (til 3)!(0.003;0.006;0.009);
+getexcesspctb:{[execessmap]
+               f: {[side;price;close;thrd]
+                  (sum (side =`b) and price>close*1+thrd) % sum (side=`b) };
+               f2: {[side;price;close;quantity;thrd]
+                   sum ?[(side=`b) and price>close*1+thrd;price*quantity;0]};
+               r: {[f;s;p;c;thrd] (f[;;;thrd];s;p;c) }[f;`side;`price;`close;] each value execessmap;
+               r2: {[f;s;p;c;q;thrd] (f[;;;;thrd];s;p;c;q) }[f2;`side;`price;`close;`quantity;] each value execessmap;
+               (`$ raze ("cbecsr";"cbecsn") ,/:\: string key execessmap )! r,r2 };
+getexcesspcts:{[execessmap]
+               f: {[side;price;close;thrd]
+                  (sum (side <>`b) and price<close*1-thrd) % sum (side<>`b) };
+               f2: {[side;price;close;quantity;thrd]
+                   sum ?[(side<>`b) and price<close*1-thrd;price*quantity;0]};
+               r: {[f;s;p;c;thrd] (f[;;;thrd];s;p;c) }[f;`side;`price;`close;] each value execessmap;
+               r2: {[f;s;p;c;q;thrd] (f[;;;;thrd];s;p;c;q) }[f2;`side;`price;`close;`quantity;] each value execessmap;
+               (`$ raze ("csecsr";"csecsn") ,/:\: string key execessmap )! r,r2 };
+
+getX2: {[data;dailydata]
+ o1:data[0];o2:data[1];e1:data[2];hpro:data[3];hpre:data[4];
+ d: `date$@[first o1;`time];
+ o1exec:   (select `time$time, sym,  Account, event, Price, Quantity, Side from e1 where  not Account in tgtcrm, event = `Executed), (select `time$time + 8t, sym, Account, event:`Executed, Price, Quantity, Side from hpre where not Account in tgtcrm);
+ x2: select quantity:sum Quantity, price: Quantity wavg Price by datadate:d, Account, sym, Side from o1exec;
+ x2: x2 lj `sym xkey select sym, close from dailydata where date = d;
+ :x2} 
+
+X2: getX2[;dailydata] peach alldata;
+X2:(),/X2;
+getnextdaymap: {[x2sigpair]:  {x!-1 xprev x}  asc exec distinct datadate from x2sigpair };
+nextdaymap: getnextdaymap[X2];
+X2:update date: nextdaymap datadate, side:Side from  X2;
+meta X2
+x2stats2: ?[X2;enlist (not;(in;`Account;(enlist significant,`C35831`C31488)));`date`sym!`date`sym; getexcesspctb[execessmap],getexcesspcts[execessmap]];
+firstP: select firstPX:first Price by date, sym, Side from rtnorig;
+rtnorig: (rtnorig lj `date`sym xkey x2stats2) lj `date`sym`Side xkey firstP;
+rtnorig: rtnorig lj `date`sym xkey select date,sym,close,adv from dailydata;
+rtnorig: update rtn: ?[Side=`b;-1.0+close%Price;1.0 - close%Price] from rtnorig;
+
+delete r2 from `.
+
+project:{[x;y] (sum x * y )%sum x*x};
+k1: exec project[  log Quantity*Price; (log 1 + rtn) ] from rtnorig  where Account = `C35831, Side = `b ,Price>0;
+k1s: exec project[  log Quantity*Price; (log 1 + rtn) ] from rtnorig  where Account = `C35831, Side = `s ,Price>0;
+k2: exec project[  log Quantity*Price; (log 1 + rtn) ] from rtnorig  where Account = `C31448,  Side = `b , Price>0;
+k2s: exec project[  log Quantity*Price; (log 1 + rtn) ] from rtnorig  where Account = `C31448,  Side = `s, Price>0;
+
+origcol:  `date`time`sym`Side`Quantity`Price`rtn;
+pricenormal:  `$ raze (raze ("w20";"w40";"w60") ,/:\: enlist ("t1") ),/:\: ("avgpb";"avgps";"minpxs";"maxpxs";"minpxb";"maxpxb"; "lastpx");
+volumenormal: `$ raze (raze ("w20";"w40";"w60") ,/:\: enlist ("t1") ),/:\: ("sumb";"sums");
+
+origcols: origcol!origcol;
+imbalance: (),/ {[wstr]  (enlist `$wstr, "bsimb")!enlist ({[x;y] `real$(x - y)%(x + y)}; `$wstr ,"sumb";`$wstr , "sums")} each raze ("w20";"w40";"w60") ,/:\: enlist ("t1") ;
+lastact: (),/ {[wstr] (enlist `$wstr, "lastact")!enlist ({?[x=`b;1;?[x=`s;-1;0]]}; `$wstr, "lastsd")} each   ("w20t1";"w40t1";"w60t1") ;
+pricecols: (),/{ ( enlist `$ raze (string x),"n") !enlist ({`real$ -1.0 + x%y}; x; `Price)} each pricenormal ;
+advncols: (),/{ ( enlist `$ raze (string x),"adv") !enlist ({`real$  (10000* x)%y}; x; `adv)} each volumenormal;
+notioncal: (),/ {( enlist `$ raze (string x),"notion")!enlist ({`real$x*y};x;`Price)} each  volumenormal;
+firstprice: (enlist `firstacpx)!enlist ({`real$-1.0 + x%y};`firstPx;`Price);
+
+f1: origcols,imbalance,lastact,pricecols,advncols,notioncal,firstprice;
+
+pricenormal:  `$ raze (raze ("w20";"w40";"w60") ,/:\:enlist ("t2")) ,/:\: ("avgpb";"avgps";"minpxs";"maxpxs";"minpxb";"maxpxb"; "lastpx");
+volumenormal: `$ raze (raze ("w20";"w40";"w60") ,/:\: enlist ("t2")) ,/:\: ("sumb";"sums");
+imbalance: (),/ {[wstr]  (enlist `$wstr, "bsimb")!enlist ({[x;y] `real$(x - y)%(x + y)}; `$wstr ,"sumb";`$wstr , "sums")} each raze ("w20";"w40";"w60") ,/:\: enlist ("t2") ;
+lastact: (),/ {[wstr] (enlist `$wstr, "lastact")!enlist ({?[x=`b;1;?[x=`s;-1;0]]}; `$wstr, "lastsd")} each  raze ("w20";"w40";"w60") ,/:\: enlist ("t2") ;
+pricecols: (),/{ ( enlist `$ raze (string x),"n") !enlist ({`real$ -1.0 + x%y}; x; `Price)} each pricenormal ;
+advncols: (),/{ ( enlist `$ raze (string x),"adv") !enlist ({`real$  (10000* x)%y}; x; `adv)} each volumenormal;
+notioncal: (),/ {( enlist `$ raze (string x),"notion")!enlist ({`real$x*y};x;`Price)} each  volumenormal;
+
+f2: imbalance,lastact,pricecols,advncols,notioncal;
+
+pricenormal:  `$ raze (raze ("w20";"w40";"w60") ,/:\: enlist ("rest") ),/:\: ("avgpb";"avgps";"minpxs";"maxpxs";"minpxb";"maxpxb"; "lastpx");
+volumenormal: `$ raze (raze ("w20";"w40";"w60") ,/:\: enlist ("rest") ),/:\: ("sumb";"sums");
+imbalance: (),/ {[wstr]  (enlist `$wstr, "bsimb")!enlist ({[x;y] `real$(x - y)%(x + y)}; `$wstr ,"sumb";`$wstr , "sums")} each raze ("w20";"w40";"w60") ,/:\: enlist ("rest") ;
+lastact: (),/ {[wstr] (enlist `$wstr, "lastact")!enlist ({?[x=`b;1;?[x=`s;-1;0]]}; `$wstr, "lastsd")} each  raze ("w20";"w40";"w60") ,/:\: enlist ("rest") ;
+pricecols: (),/{ ( enlist `$ raze (string x),"n") !enlist ({`real$ -1.0 + x%y}; x; `Price)} each pricenormal ;
+advncols: (),/{ ( enlist `$ raze (string x),"adv") !enlist ({`real$  (10000* x)%y}; x; `adv)} each volumenormal;
+notioncal: (),/ {( enlist `$ raze (string x),"notion")!enlist ({`real$x*y};x;`Price)} each  volumenormal;
+
+f3: imbalance,lastact,pricecols,advncols,notioncal;
+
+
+rfac1: ?[rtnorig;  ( (=;`Side; enlist `b);(=;`Account;enlist `C35831);({x>0};`Price))  ;0b; f1,f2,f3 ];
+rfac2: ?[rtnorig;  ( (=;`Side; enlist `b);(=;`Account;enlist `C31448);({x>0};`Price))  ;0b; f1,f2,f3];
+
+p)import sys
+p)sys.path.append('/home/zheshi/workspace/signalQ/researchq')
+p)from qpyexports import * 
+p)from pyq import q
+\l /home/zheshi/workspace/signalQ/researchq/loadqlgb.q
+p)from pyqutils import *
+
+
+
+imbalance: (),/ {[wstr]  (enlist `$wstr, "bsimb")!enlist ({[x;y] `real$(x - y)%(x + y)}; `$wstr ,"sumb";`$wstr , "sums")} each raze ("w20";"w40";"w60";"wall") ,/:\: ("t0";"t1";"t2";"rest") ;
+lastact: (),/ {[wstr] (enlist `$wstr, "lastact")!enlist ({?[x=`b;1;?[x=`s;-1;0]]}; `$wstr, "lastsd")} each  raze ("w20";"w40";"w60";"wall") ,/:\: ("t0";"t1";"t2";"rest") ;
+pricenormal:  `$ raze (raze ("w20";"w40";"w60";"wall") ,/:\: ("t0";"t1";"t2";"rest") ),/:\: ("avgpb";"avgps";"minpxs";"maxpxs";"minpxb";"maxpxb"; "lastpx");
+pricecols: (),/{ ( enlist `$ raze (string x),"n") !enlist ({`real$ -1.0 + x%y}; x; `Price)} each pricenormal ;
+volumenormal: `$ raze (raze ("w20";"w40";"w60";"wall") ,/:\: ("t0";"t1";"t2";"rest") ),/:\: ("sumb";"sums");
+notioncal: (),/ {( enlist `$ raze (string x),"notion")!enlist ({`real$x*y};x;`Price)} each  volumenormal;
+// These 3 are extra dependent, adv, firstPX, X2stats,
+advncols: (),/{ ( enlist `$ raze (string x),"adv") !enlist ({`real$  (10000* x)%y}; x; `adv)} each volumenormal;
+firstprice: (enlist `firstacpx)!enlist ({`real$-1.0 + x%y};`firstPX;`Price);
+ctminus1: {x!x}  `cbecsr0`cbecsr1`cbecsr2`cbecsn0`cbecsn1`cbecsn2`csecsr0`csecsr1`csecsr2`csecsn0`csecsn1`csecsn2;
+
+.SIG.predictors: imbalance,lastact,pricecols,advncols,notioncal,firstprice,ctminus1;
+.SIG.predictorswithoutt0: ((key .SIG.predictors) where not (key .SIG.predictors) like "*t0*")#.SIG.predictors;
+
+.STRAT.derivefeaturesandsignalsrequired:{[modeldf;signalcalmap;featurewjmap]
+        signalsselected: exec distinct split_feature from modeldf where split_feature <> `None;
+        usedfeatures: distinct {x where -11h = type each x}  raze value signalsselected#signalcalmap;
+        (usedfeatures:usedfeatures where usedfeatures in key featurewjmap;signalsselected)};
+
+.STRAT.modeldfc1: ("ISSSSSSSSFFFFFFF";enlist ",")  0:\`$":/home/zheshi/workspace/signalQ/researchq/brave3/modeldfc1.csv";
+.STRAT.modeldfc2: ("ISSSSSSSSFFFFFFF";enlist ",")  0:\`$":/home/zheshi/workspace/signalQ/researchq/brave3/modeldfc2.csv";
+
+.STRAT.loadmodelparams:{[]
+.STRAT.c1features:: .STRAT.derivefeaturesandsignalsrequired[.STRAT.modeldfc1;.SIG.predictorswithoutt0;wjcalcmap][0];
+.STRAT.c2features:: .STRAT.derivefeaturesandsignalsrequired[.STRAT.modeldfc2;.SIG.predictors;wjcalcmap][0];
+.STRAT.c1signals::  .STRAT.derivefeaturesandsignalsrequired[.STRAT.modeldfc1;.SIG.predictorswithoutt0;wjcalcmap][1];
+.STRAT.c2signals::  .STRAT.derivefeaturesandsignalsrequired[.STRAT.modeldfc2;.SIG.predictors;wjcalcmap][1];
+.STRAT.modelf1:: .lgb.buildmodeltokdb[.STRAT.modeldfc1];
+.STRAT.modelf2:: .lgb.buildmodeltokdb[.STRAT.modeldfc2];
+ };
+
+
+.STRAT.k1: 0.0001856159;
+.STRAT.k2: 0.0003301181;
+.STRAT.loadmodelparams[];
+
+.STRAT.getpredrtn:{[caculatedfeatures;modellabel]
+
+    $[modellabel=1; [features: .STRAT.c1features; signals:.STRAT.c1signals; signalfulmap:.SIG.predictorswithoutt0; k: .STRAT.k1;
+                     modelf:.STRAT.modelf1   ];
+                    [features: .STRAT.c2features; signals:.STRAT.c2signals; signalfulmap:.SIG.predictors; k: .STRAT.k2  ;
+                     modelf:.STRAT.modelf2   ]];    
+     calculatedsignals: ?[caculatedfeatures;();0b;signals#signalfulmap];
+     predrtncol: select date,time,sym,Quantity, Price, rtn , predrtn: (k * log Quantity*Price)  + modelf[calculatedsignals] from caculatedfeatures;
+     :predrtncol
+ };
+
+
+fitc1: .STRAT.getpredrtn[select from rtnorig where Side = `b, Account = `C35831, Price>0 ;1];
+fitc2: .STRAT.getpredrtn[select from rtnorig where Side = `b, Account = `C31448, Price>0 ;2];
+.Q.gc[];
+maxof:{?[x>y;x;y]};
+minof:{?[x<y;x;y]};
+
+// select (Quantity*Price) wavg rtn, sum Quantity*Price by predrtn>0.00285 from fitc1 where date within (2022.04.01,2023.03.30)
+// select (Quantity*Price) wavg rtn, sum Quantity*Price by predrtn>0.0043 from fitc2 where date within (2022.04.01,2023.03.30)
+ select minof[maxof[Quantity*Price; (exp  predrtn%k1)];max Quantity*Price] wavg rtn, avg rtn,sum minof[maxof[Quantity*Price; (exp  predrtn%k1)];max Quantity*Price]  ,sum Quantity*Price by predrtn>0.0025 from fitc1 where date within (2022.04.01,2023.03.30)
+select from dailydata where date = first date
+
+ select (Quantity*Price) wavg rtn, sum Quantity*Price by predrtn>0.00285 from fitc1 where date within (2022.04.01,2023.03.30)
