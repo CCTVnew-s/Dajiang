@@ -1,407 +1,628 @@
-// migrate previous feature to current data settings
 
-expwjf:{[f;args;newname] 
-         (enlist f),args, newname};
+// Buy and Sell
 
-applyf1:{[f;cateory;side]
-          {[f;x;catelabel;sidelabel;cate;side;name]
-            loc: (catelabel in cate ) and (sidelabel in side);
-            x: x where loc; :f[x]}[f;;;;cateory;side;]};
+buyquantityadjf:{[qtycol;rtncol;pricecol;k1;maxratio;minratio]
+             ({[qtycol;rtncol;pricecol;k1;maxratio;minratio] min(max((exp rtncol%k1)%pricecol; minratio*qtycol);maxratio*qtycol)}[;;;k1;maxratio;minratio];qtycol;rtncol;pricecol)};
 
-applyf2:{[f;cateory;side]
-          {[f;x;y;catelabel;sidelabel;cate;side;name]
-            loc: (catelabel in cate ) and (sidelabel in side);
-            x: x where loc; y: y where loc;
-             :f[x;y]}[f;;;;;cateory;side;]};
-
-applyf3:{[f;cateory;side]
-          {[f;x;y;z;catelabel;sidelabel;groupids;name]
-            loc: (catelabel in groupids`cate) and (sidelabel in groupids`side);
-            x: x where loc; y: y where loc; z: z where loc;
-             :f[x;y;z]}[f;;;;;;`cate`side!(cateory;side);]};
-
-applyf1group1:{[f;groupval]
-          {[f;x;grouplabel;groupval;name]
-            loc: (grouplabel in groupval);
-            x: x where loc;
-             :f[x]}[f;;;groupval;]};
-
-applyf2group1:{[f;groupval]
-          {[f;x;y;grouplabel;groupval;name]
-            loc: (grouplabel in groupval);
-            x: x where loc; y: y where loc; 
-             :f[x;y]}[f;;;;groupval;]};
-
-applyf3group1:{[f;groupval]
-          {[f;x;y;z;grouplabel;groupval;name]
-            loc: (grouplabel in groupval);
-            x: x where loc; y: y where loc; z: z where loc;
-             :f[x;y;z]}[f;;;;;groupval;]};
-
-applyf4group1:{[f;groupval]
-          {[f;x;y;z;v;grouplabel;groupval;name]
-            loc: (grouplabel in groupval);
-            x: x where loc; y: y where loc; z: z where loc; v: v where loc;
-             :f[x;y;z;v]}[f;;;;;;groupval;]};
-
-applyf1group0:{[f]
-          {[f;x;name]
-             :f[x]}[f;;]};
-
-applyf2group0:{[f]
-          {[f;x;y;name]
-             :f[x;y]}[f;;;]};
-
-applyf3group0:{[f]
-          {[f;x;y;z;name]
-             :f[x;y;z]}[f;;;;]};
-applyf4group0:{[f]
-          {[f;x;y;z;v;name]
-             :f[x;y;z;v]}[f;;;;;]};
-
-
-// I
-
-// sparse rules
-// simple stats
-basefeatureset1:{[groupkey;groupval;groupid]
-
-    ( expwjf[applyf1[sum;groupval;`b];`Quantity,groupkey,`Side;`$ (string groupid), "sumb"];
-      expwjf[applyf1[sum;groupval;`s];`Quantity,groupkey,`Side;`$ (string groupid), "sums"];
-      expwjf[applyf2[{?[0<count x;x wavg y;0nf]};groupval;`b];`Quantity`Price,groupkey,`Side;`$ (string groupid),"avgpb"];
-      expwjf[applyf2[{?[0<count x;x wavg y;0nf]};groupval;`s];`Quantity`Price,groupkey,`Side;`$ (string groupid),"avgps"];
-      expwjf[applyf1[{?[0<count x;min x;0nf]};groupval;`b];`Price,groupkey,`Side;`$ (string groupid),"minpxb"];
-      expwjf[applyf1[{?[0<count x;min x;0nf]};groupval;`s];`Price,groupkey,`Side;`$ (string groupid),"minpxs"];
-      expwjf[applyf1[{?[0<count x;max x;0nf]};groupval;`s];`Price,groupkey,`Side;`$ (string groupid),"maxpxs"];
-      expwjf[applyf1[{?[0<count x;max x;0nf]};groupval;`b];`Price,groupkey,`Side;`$ (string groupid),"maxpxb"];
-      expwjf[applyf1group1[{?[0<count x;last x;`]};groupval];`Side,groupkey;`$ (string groupid),"lastsd"];
-      expwjf[applyf1group1[{?[0<count x;last x;0nf]};groupval];`Price,groupkey;`$ (string groupid),"lastpx"])
-
-};
-// multiple stats
-// side account counts
-// b/s (only) account avg price , total quantity
-// tgtside: enlist `s
-accountsidestats:{[sidecol;accol;tgtside]
-            if[0 = count sidecol;:0i]; 
-            sum value  {[x;y] y ~ asc distinct x}[; tgtside] each sidecol group accol};
-
-// accountsidestats[ sidecol ;  accol; enlist `s]                 
-singlesideacountstats:{[accol;sidecol;qtycol;pricecol;tgtside]
-            if[0 = count accol; :(();())];
-            acstats: {[x;y] y ~ asc distinct x}[; tgtside] each sidecol group accol;
-            acs: asc where acstats;
-            qdic:qtycol group accol;
-            pdic: pricecol group accol;
-            stats: {[p;q;a] (sum q[a]; q[a] wavg p[a])}[pdic;qdic;] each acs;
-            :(enlist (@[;0] each stats)),(enlist (@[;1] each stats))
-
-};
- 
-basefeatureset2:{[groupkey;groupval;groupid]
-
-    ( expwjf[applyf2group1[accountsidestats[;;enlist `b];groupval];`Side`Account,groupkey;`$ (string groupid), "nbacs"];
-      expwjf[applyf2group1[accountsidestats[;;enlist `s];groupval];`Side`Account,groupkey;`$ (string groupid), "nsacs"];   
-      expwjf[applyf2group1[accountsidestats[;;`b`s];groupval];`Side`Account,groupkey;`$ (string groupid), "nbsacs"];
-      expwjf[applyf4group1[singlesideacountstats[;;;;enlist `b];groupval];`Account`Side`Quantity`Price,groupkey;`$ (string groupid), "bacstats"];
-      expwjf[applyf4group1[singlesideacountstats[;;;;enlist `s];groupval];`Account`Side`Quantity`Price,groupkey;`$ (string groupid), "sacstats"]
-    )
-      
-};
-
-//pricecol: til 20
-// qty: 20#1
-// splitN:20
-// more granular
+         
 priceqtl:{[price;qty;splitN]
             qtyqtl: (1 + til splitN - 1) * (1.0%splitN) *  sum qty;
             sortqty: qty iasc price;
             reverse 1 _ fills reverse value (til splitN )#max each (asc price) group sum each (sums sortqty) >\: qtyqtl};
-//priceqtl[pricecol;qty;splitN]
+
+notionsortatcum:{[sortx;notion;tgt]
+                sortednotion: notion idesc sortx;
+                min (desc sortx)  where (sums sortednotion) < tgt};
 
 
-basefeatureset3:{[groupkey;groupval;groupid]
+// only for B, r include Price col
+// rankf rankf function
 
-    ( expwjf[applyf2[priceqtl[;;5];groupval;`b];`Price`Quantity,groupkey,`Side;`$ (string groupid), "bpxqtls"];
-      expwjf[applyf2[priceqtl[;;5];groupval;`s];`Price`Quantity,groupkey,`Side;`$ (string groupid), "spxqtls"]   
-    )
-      
-};
+getbuycandidate: {[r;rankf;qtycol;config]
 
-// all
-basefeatureset4:{[groupid]
+notions: ?[r;();0b;(enlist `n)!enlist (*;qtycol;`Price)]`n;
+calibratet: ([] date: exec date from r; rkx: rankf[r]; notion:notions);
+method: config`method;
+qtlN: config`qtlN;
 
-    ( 
-      expwjf[applyf2group0[accountsidestats[;;enlist `b]];`Side`Account;`$ (string groupid), "nbacs"];
-      expwjf[applyf2group0[accountsidestats[;;enlist `s]];`Side`Account;`$ (string groupid), "nsacs"];   
-      expwjf[applyf2group0[accountsidestats[;;`b`s]];`Side`Account;`$ (string groupid), "nbsacs"];
-      expwjf[applyf4group0[singlesideacountstats[;;;;enlist `b]];`Account`Side`Quantity`Price;`$ (string groupid), "bacstats"];
-      expwjf[applyf4group0[singlesideacountstats[;;;;enlist `s]];`Account`Side`Quantity`Price;`$ (string groupid), "sacstats"];
-      expwjf[applyf2group1[priceqtl[;;5];`b];`Price`Quantity`Side;`$ (string groupid), "bpxqtls"];
-      expwjf[applyf2group1[priceqtl[;;5];`s];`Price`Quantity`Side;`$ (string groupid), "spxqtls"]  
-    )
-      
-};
-
-wjcalcbywindows:      basefeatureset1[`category;`tier0;`w20t0],
-                      basefeatureset1[`category;`tier1a;`w20t1],
-                      basefeatureset1[`category;`tier2q;`w20t2],
-                      basefeatureset2[`category;`tier2q;`w20t2],
-                      basefeatureset3[`category;`tier2q;`w20t2],
-                      basefeatureset1[`category;`tier3q;`w20t3],
-                      basefeatureset2[`category;`tier3q;`w20t3],
-                      basefeatureset3[`category;`tier3q;`w20t3],
-                      basefeatureset1[`category;`others;`w20rest],                
-                      basefeatureset2[`category;`others;`w20rest],
-                      basefeatureset3[`category;`others;`w20rest],
-                      basefeatureset1[`category;`tier0;`w40t0],
-                      basefeatureset1[`category;`tier1a;`w40t1],
-                      basefeatureset1[`category;`tier2q;`w40t2],
-                      basefeatureset2[`category;`tier2q;`w40t2],
-                      basefeatureset3[`category;`tier2q;`w40t2],
-                      basefeatureset1[`category;`tier3q;`w40t3],
-                      basefeatureset2[`category;`tier3q;`w40t3],
-                      basefeatureset3[`category;`tier3q;`w40t3],
-                      basefeatureset1[`category;`others;`w40rest],                
-                      basefeatureset2[`category;`others;`w40rest],
-                      basefeatureset3[`category;`others;`w40rest],
-                      basefeatureset1[`category;`tier0;`w60t0],
-                      basefeatureset1[`category;`tier1a;`w60t1],
-                      basefeatureset1[`category;`tier2q;`w60t2],
-                      basefeatureset2[`category;`tier2q;`w60t2],
-                      basefeatureset3[`category;`tier2q;`w60t2],
-                      basefeatureset1[`category;`tier3q;`w60t3],
-                      basefeatureset2[`category;`tier3q;`w60t3],
-                      basefeatureset3[`category;`tier3q;`w60t3],
-                      basefeatureset1[`category;`others;`w60rest],                
-                      basefeatureset2[`category;`others;`w60rest],
-                      basefeatureset3[`category;`others;`w60rest],
-                      basefeatureset1[`category;`tier0;`wallt0],
-                      basefeatureset1[`category;`tier1a;`wallt1],
-                      basefeatureset1[`category;`tier2q;`wallt2],
-                      basefeatureset2[`category;`tier2q;`wallt2],
-                      basefeatureset1[`category;`tier3q;`wallt3],
-                      basefeatureset2[`category;`tier3q;`wallt3],
-                      basefeatureset1[`category;`others;`wallrest],                
-                      basefeatureset2[`category;`others;`wallrest],
-                      basefeatureset3[`category;`others;`wallrest],
-                      basefeatureset4[`wallrest];
-
-wjwindef:`w20`w40`w60`wall!(20;40;60;0W);
-
-
-
-parsewjcaltomap:{[wjcalcbywindows;wjwindef]
-featurenames: last each wjcalcbywindows;
-wjw: last each (value wjwindef) where  each  flip featurenames like/: (string key wjwindef),\: "*" ;
-:featurenames! (enlist each wjcalcbywindows),' wjw};
-wjcalcmap: parsewjcaltomap[wjcalcbywindows;wjwindef];
-
-// 
-parallelwjatsym:{[X3d;X1d;wjfeature;wjcalcmap;symx]
-x3: `time xasc select from X3d where sym = symx;
-x1: `time xasc select  from X1d where sym = symx;
-if[0 = count x3;:()];
-wjcals: $[wjfeature~`;wjcalcmap;wjfeature#wjcalcmap];
-featuresbyw: (key wjcals) group last each value wjcals;
-rtn: {[x3;x1;wjcals;featuresbyw;w]
- wj1[ $[w=0W; ((count x3)#0t;x3`time); (x3`time) +/: (neg w; 0) * 60 * 1000];
-      `time; x3; (enlist x1), first each wjcals[featuresbyw[w]]]}[x3;x1;wjcals;featuresbyw;] each key featuresbyw;
-:   {x lj `time xkey y} over rtn};
-
-
-accoutmap:()!();
-accoutmap[`major]:`C35831`C31448;
-accoutmap[`tier0]:enlist `C35766;
-accoutmap[`tier1a]: `C32042`C36987;
-accoutmap[`tier2q]: `C43244`C36022`C35848;
-accoutmap[`tier3q]: `C37208`C36379`C36380`C29168`C36146`C40120;
-
-reverseacmap: (raze value accoutmap)!  raze (count each value accoutmap) #' key accoutmap;
-
-
-
-
-fcalculatesignal:{[X3d;X1d;wjfeature;wjcalcmap]
- X1d: update category: `others ^ reverseacmap Account from X1d;
- t: (),/ parallelwjatsym[X3d;X1d;wjfeature;wjcalcmap;]   peach exec distinct sym from X3d;
- :t
+if[method = `ConstQtlCount;
+   thrd: exec min rkx from calibratet where (qtlN - 1) = qtlN xrank rkx ;
+   notionselect: select sum notion by date from calibratet where rkx > thrd;
+   rtn: r where exec rkx >= thrd from calibratet;
+   :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+  ];
+ if[method = `ConstQtlNotion;
+   thrd: max exec priceqtl[rkx; notion; qtlN] from calibratet;
+   rtn: r where exec rkx >= thrd from calibratet;
+   :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+  ];
+ if[method = `MVQtlCount;
+    mvperiod: config`avgperiod;
+    thrd: select {min x where (y - 1) = y xrank x}[;qtlN] rkx by date from calibratet;
+    thrd: select date, thrdx: (first rkx) ^ 1 xprev mvperiod mavg rkx from thrd;
+    rtn: r where exec rkx >= thrdx from  (calibratet lj `date xkey thrd);
+    :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+  ];
+  if[method = `MVQtlNotion;
+    mvperiod: config`avgperiod;
+    thrd: select max priceqtl[;notion;qtlN] rkx by date from calibratet;
+    thrd: select date, thrdx: (first rkx) ^ 1 xprev mvperiod mavg rkx from thrd;
+    rtn: r where exec rkx >= thrdx from  (calibratet lj `date xkey thrd);
+    :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+    ];
+  if[method = `MVFixNotion;
+    mvperiod: config`avgperiod;
+    fixnotionfactor: config`fixnotionfactor;
+    fixnotion: fixnotionfactor * (1.0%qtlN) * exec avg notion from select sum notion by date from calibratet;
+    0N!fixnotion;
+    thrd: select rkx: notionsortatcum[rkx;notion;fixnotion] by date from calibratet;
+    thrd: select date, thrdx: (first rkx) ^ 1 xprev mvperiod mavg rkx from thrd;
+    rtn: r where exec rkx >= thrdx from  (calibratet lj `date xkey thrd);
+    :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+   ];
+  if[method = `MVMixNotionQtl
+    mvperiod: config`avgperiod;
+    fixnotionfactor: config`fixnotionfactor;
+    fixnotion: fixnotionfactor * (1.0%qtlN) * exec avg notion from select sum notion by date from calibratet;
+    thrd: select rkx: notionsortatcum[rkx;notion;fixnotion], rkx2: {min x where (y - 1) = y xrank x}[;qtlN] rkx   by date from calibratet;
+    thrd: select date, rkx: min (rkx;rkx2) from thrd;
+    thrd: select date, thrdx: (first rkx) ^ 1 xprev mvperiod mavg rkx from thrd;
+    rtn: r where exec rkx >= thrdx from  (calibratet lj `date xkey thrd);
+    :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+   ];
 };
 
 
-cleanX3:{[X3]
- update time:`time$time, Side:  ?[Side = `$"1"; `b; `s], sym: .util.strclean each RIC from select from X3 where Price > 0, event = `Pending };
 
-cleanX1:{[X1]
- update time:`time$time, Side:  ?[Side = `$"1"; `b; `s],sym: .util.strclean each RIC  from select from X1 where Price > 0 };
+getbuycandidatedebug: {[r;rankf;qtycol;config]
 
+notions: ?[r;();0b;(enlist `n)!enlist (*;qtycol;`Price)]`n;
+calibratet: ([] date: exec date from r; rkx: rankf[r]; notion:notions);
+method: config`method;
+qtlN: config`qtlN;
 
-calculatefeatureforday:{[data]
-    o1:data[0];o2:data[1];e1:data[2];hpro:data[3];hpre:data[4];
-    d: `date$@[first o1;`time];
-   0N!"working on date ",string d;
-  tgtframe: (select sym ,`time$time, Side, Account, OrderId, Price, Quantity from o1 where Account in tgtcrm, event=`Pending), (select sym,`time$time, Side, Account,OrderId, Price, Quantity from hpro where Account in tgtcrm, event=`Pending);
-   o1exec:   (select `time$time, sym,  Account, event, Price, Quantity, Side from e1 where  not Account in tgtcrm, event = `Executed), (select `time$time + 8t, sym, Account, event:`Executed, Price, Quantity, Side from hpre where not Account in tgtcrm);
-if[0 = count tgtframe;:()];
-featuredX3: fcalculatesignal[tgtframe;o1exec;`;wjcalcmap];
-: update date:d from featuredX3;
-}
-
-
-rtnorig : calculatefeatureforday each alldata;
-rtnorig : (),/ rtnorig ;
-
-significant: accoutmap[`tier2q],accoutmap[`tier3q];
-execessmap: (til 3)!(0.003;0.006;0.009);
-getexcesspctb:{[execessmap]
-               f: {[side;price;close;thrd]
-                  (sum (side =`b) and price>close*1+thrd) % sum (side=`b) };
-               f2: {[side;price;close;quantity;thrd]
-                   sum ?[(side=`b) and price>close*1+thrd;price*quantity;0]};
-               r: {[f;s;p;c;thrd] (f[;;;thrd];s;p;c) }[f;`side;`price;`close;] each value execessmap;
-               r2: {[f;s;p;c;q;thrd] (f[;;;;thrd];s;p;c;q) }[f2;`side;`price;`close;`quantity;] each value execessmap;
-               (`$ raze ("cbecsr";"cbecsn") ,/:\: string key execessmap )! r,r2 };
-getexcesspcts:{[execessmap]
-               f: {[side;price;close;thrd]
-                  (sum (side <>`b) and price<close*1-thrd) % sum (side<>`b) };
-               f2: {[side;price;close;quantity;thrd]
-                   sum ?[(side<>`b) and price<close*1-thrd;price*quantity;0]};
-               r: {[f;s;p;c;thrd] (f[;;;thrd];s;p;c) }[f;`side;`price;`close;] each value execessmap;
-               r2: {[f;s;p;c;q;thrd] (f[;;;;thrd];s;p;c;q) }[f2;`side;`price;`close;`quantity;] each value execessmap;
-               (`$ raze ("csecsr";"csecsn") ,/:\: string key execessmap )! r,r2 };
-
-getX2: {[data;dailydata]
- o1:data[0];o2:data[1];e1:data[2];hpro:data[3];hpre:data[4];
- d: `date$@[first o1;`time];
- o1exec:   (select `time$time, sym,  Account, event, Price, Quantity, Side from e1 where  not Account in tgtcrm, event = `Executed), (select `time$time + 8t, sym, Account, event:`Executed, Price, Quantity, Side from hpre where not Account in tgtcrm);
- x2: select quantity:sum Quantity, price: Quantity wavg Price by datadate:d, Account, sym, Side from o1exec;
- x2: x2 lj `sym xkey select sym, close from dailydata where date = d;
- :x2} 
-
-X2: getX2[;dailydata] peach alldata;
-X2:(),/X2;
-getnextdaymap: {[x2sigpair]:  {x!-1 xprev x}  asc exec distinct datadate from x2sigpair };
-nextdaymap: getnextdaymap[X2];
-X2:update date: nextdaymap datadate, side:Side from  X2;
-meta X2
-x2stats2: ?[X2;enlist (not;(in;`Account;(enlist significant,`C35831`C31488)));`date`sym!`date`sym; getexcesspctb[execessmap],getexcesspcts[execessmap]];
-firstP: select firstPX:first Price by date, sym, Side from rtnorig;
-rtnorig: (rtnorig lj `date`sym xkey x2stats2) lj `date`sym`Side xkey firstP;
-rtnorig: rtnorig lj `date`sym xkey select date,sym,close,adv from dailydata;
-rtnorig: update rtn: ?[Side=`b;-1.0+close%Price;1.0 - close%Price] from rtnorig;
-
-delete r2 from `.
-
-project:{[x;y] (sum x * y )%sum x*x};
-k1: exec project[  log Quantity*Price; (log 1 + rtn) ] from rtnorig  where Account = `C35831, Side = `b ,Price>0;
-k1s: exec project[  log Quantity*Price; (log 1 + rtn) ] from rtnorig  where Account = `C35831, Side = `s ,Price>0;
-k2: exec project[  log Quantity*Price; (log 1 + rtn) ] from rtnorig  where Account = `C31448,  Side = `b , Price>0;
-k2s: exec project[  log Quantity*Price; (log 1 + rtn) ] from rtnorig  where Account = `C31448,  Side = `s, Price>0;
-
-origcol:  `date`time`sym`Side`Quantity`Price`rtn;
-pricenormal:  `$ raze (raze ("w20";"w40";"w60") ,/:\: enlist ("t1") ),/:\: ("avgpb";"avgps";"minpxs";"maxpxs";"minpxb";"maxpxb"; "lastpx");
-volumenormal: `$ raze (raze ("w20";"w40";"w60") ,/:\: enlist ("t1") ),/:\: ("sumb";"sums");
-
-origcols: origcol!origcol;
-imbalance: (),/ {[wstr]  (enlist `$wstr, "bsimb")!enlist ({[x;y] `real$(x - y)%(x + y)}; `$wstr ,"sumb";`$wstr , "sums")} each raze ("w20";"w40";"w60") ,/:\: enlist ("t1") ;
-lastact: (),/ {[wstr] (enlist `$wstr, "lastact")!enlist ({?[x=`b;1;?[x=`s;-1;0]]}; `$wstr, "lastsd")} each   ("w20t1";"w40t1";"w60t1") ;
-pricecols: (),/{ ( enlist `$ raze (string x),"n") !enlist ({`real$ -1.0 + x%y}; x; `Price)} each pricenormal ;
-advncols: (),/{ ( enlist `$ raze (string x),"adv") !enlist ({`real$  (10000* x)%y}; x; `adv)} each volumenormal;
-notioncal: (),/ {( enlist `$ raze (string x),"notion")!enlist ({`real$x*y};x;`Price)} each  volumenormal;
-firstprice: (enlist `firstacpx)!enlist ({`real$-1.0 + x%y};`firstPx;`Price);
-
-f1: origcols,imbalance,lastact,pricecols,advncols,notioncal,firstprice;
-
-pricenormal:  `$ raze (raze ("w20";"w40";"w60") ,/:\:enlist ("t2")) ,/:\: ("avgpb";"avgps";"minpxs";"maxpxs";"minpxb";"maxpxb"; "lastpx");
-volumenormal: `$ raze (raze ("w20";"w40";"w60") ,/:\: enlist ("t2")) ,/:\: ("sumb";"sums");
-imbalance: (),/ {[wstr]  (enlist `$wstr, "bsimb")!enlist ({[x;y] `real$(x - y)%(x + y)}; `$wstr ,"sumb";`$wstr , "sums")} each raze ("w20";"w40";"w60") ,/:\: enlist ("t2") ;
-lastact: (),/ {[wstr] (enlist `$wstr, "lastact")!enlist ({?[x=`b;1;?[x=`s;-1;0]]}; `$wstr, "lastsd")} each  raze ("w20";"w40";"w60") ,/:\: enlist ("t2") ;
-pricecols: (),/{ ( enlist `$ raze (string x),"n") !enlist ({`real$ -1.0 + x%y}; x; `Price)} each pricenormal ;
-advncols: (),/{ ( enlist `$ raze (string x),"adv") !enlist ({`real$  (10000* x)%y}; x; `adv)} each volumenormal;
-notioncal: (),/ {( enlist `$ raze (string x),"notion")!enlist ({`real$x*y};x;`Price)} each  volumenormal;
-
-f2: imbalance,lastact,pricecols,advncols,notioncal;
-
-pricenormal:  `$ raze (raze ("w20";"w40";"w60") ,/:\: enlist ("rest") ),/:\: ("avgpb";"avgps";"minpxs";"maxpxs";"minpxb";"maxpxb"; "lastpx");
-volumenormal: `$ raze (raze ("w20";"w40";"w60") ,/:\: enlist ("rest") ),/:\: ("sumb";"sums");
-imbalance: (),/ {[wstr]  (enlist `$wstr, "bsimb")!enlist ({[x;y] `real$(x - y)%(x + y)}; `$wstr ,"sumb";`$wstr , "sums")} each raze ("w20";"w40";"w60") ,/:\: enlist ("rest") ;
-lastact: (),/ {[wstr] (enlist `$wstr, "lastact")!enlist ({?[x=`b;1;?[x=`s;-1;0]]}; `$wstr, "lastsd")} each  raze ("w20";"w40";"w60") ,/:\: enlist ("rest") ;
-pricecols: (),/{ ( enlist `$ raze (string x),"n") !enlist ({`real$ -1.0 + x%y}; x; `Price)} each pricenormal ;
-advncols: (),/{ ( enlist `$ raze (string x),"adv") !enlist ({`real$  (10000* x)%y}; x; `adv)} each volumenormal;
-notioncal: (),/ {( enlist `$ raze (string x),"notion")!enlist ({`real$x*y};x;`Price)} each  volumenormal;
-
-f3: imbalance,lastact,pricecols,advncols,notioncal;
-
-
-rfac1: ?[rtnorig;  ( (=;`Side; enlist `b);(=;`Account;enlist `C35831);({x>0};`Price))  ;0b; f1,f2,f3 ];
-rfac2: ?[rtnorig;  ( (=;`Side; enlist `b);(=;`Account;enlist `C31448);({x>0};`Price))  ;0b; f1,f2,f3];
-
-p)import sys
-p)sys.path.append('/home/zheshi/workspace/signalQ/researchq')
-p)from qpyexports import * 
-p)from pyq import q
-\l /home/zheshi/workspace/signalQ/researchq/loadqlgb.q
-p)from pyqutils import *
+if[method = `ConstQtlCount;
+   thrd: exec min rkx from calibratet where (qtlN - 1) = qtlN xrank rkx ;
+   notionselect: select sum notion by date from calibratet where rkx > thrd;
+   rtn: r where exec rkx >= thrd from calibratet;
+   :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+  ];
+ if[method = `ConstQtlNotion;
+   thrd: max exec priceqtl[rkx; notion; qtlN] from calibratet;
+   rtn: r where exec rkx >= thrd from calibratet;
+   :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+  ];
+ if[method = `MVQtlCount;
+    mvperiod: config`avgperiod;
+    thrd: select {min x where (y - 1) = y xrank x}[;qtlN] rkx by date from calibratet;
+    thrd: select date, thrdx: (first rkx) ^ 1 xprev mvperiod mavg rkx from thrd;
+    rtn: r where exec rkx >= thrdx from  (calibratet lj `date xkey thrd);
+    :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+  ];
+  if[method = `MVQtlNotion;
+    mvperiod: config`avgperiod;
+    thrd: select max priceqtl[;notion;qtlN] rkx by date from calibratet;
+    thrd: select date, thrdx: (first rkx) ^ 1 xprev mvperiod mavg rkx from thrd;
+    rtn: r where exec rkx >= thrdx from  (calibratet lj `date xkey thrd);
+    :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+    ];
+  if[method = `MVFixNotion;
+    mvperiod: config`avgperiod;
+    fixnotionfactor: config`fixnotionfactor;
+    fixnotion: fixnotionfactor * (1.0%qtlN) * exec avg notion from select sum notion by date from calibratet;
+    0N!fixnotion;
+    thrd: select rkx: notionsortatcum[rkx;notion;fixnotion] by date from calibratet;
+    thrd: select date, thrdx: (first rkx) ^ 1 xprev mvperiod mavg rkx from thrd;
+    :thrd   ];
+  if[method = `MVMixNotionQtl
+    mvperiod: config`avgperiod;
+    fixnotionfactor: config`fixnotionfactor;
+    fixnotion: fixnotionfactor * (1.0%qtlN) * exec avg notion from select sum notion by date from calibratet;
+    thrd: select rkx: notionsortatcum[rkx;notion;fixnotion], rkx2: {min x where (y - 1) = y xrank x}[;qtlN] rkx   by date from calibratet;
+    thrd: select date, rkx: min (rkx;rkx2) from thrd;
+    thrd: select date, thrdx: (first rkx) ^ 1 xprev mvperiod mavg rkx from thrd;
+    rtn: r where exec rkx >= thrdx from  (calibratet lj `date xkey thrd);
+    :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+   ];
+};
 
 
 
-imbalance: (),/ {[wstr]  (enlist `$wstr, "bsimb")!enlist ({[x;y] `real$(x - y)%(x + y)}; `$wstr ,"sumb";`$wstr , "sums")} each raze ("w20";"w40";"w60";"wall") ,/:\: ("t0";"t1";"t2";"rest") ;
-lastact: (),/ {[wstr] (enlist `$wstr, "lastact")!enlist ({?[x=`b;1;?[x=`s;-1;0]]}; `$wstr, "lastsd")} each  raze ("w20";"w40";"w60";"wall") ,/:\: ("t0";"t1";"t2";"rest") ;
-pricenormal:  `$ raze (raze ("w20";"w40";"w60";"wall") ,/:\: ("t0";"t1";"t2";"rest") ),/:\: ("avgpb";"avgps";"minpxs";"maxpxs";"minpxb";"maxpxb"; "lastpx");
-pricecols: (),/{ ( enlist `$ raze (string x),"n") !enlist ({`real$ -1.0 + x%y}; x; `Price)} each pricenormal ;
-volumenormal: `$ raze (raze ("w20";"w40";"w60";"wall") ,/:\: ("t0";"t1";"t2";"rest") ),/:\: ("sumb";"sums");
-notioncal: (),/ {( enlist `$ raze (string x),"notion")!enlist ({`real$x*y};x;`Price)} each  volumenormal;
-// These 3 are extra dependent, adv, firstPX, X2stats,
-advncols: (),/{ ( enlist `$ raze (string x),"adv") !enlist ({`real$  (10000* x)%y}; x; `adv)} each volumenormal;
-firstprice: (enlist `firstacpx)!enlist ({`real$-1.0 + x%y};`firstPX;`Price);
-ctminus1: {x!x}  `cbecsr0`cbecsr1`cbecsr2`cbecsn0`cbecsn1`cbecsn2`csecsr0`csecsr1`csecsr2`csecsn0`csecsn1`csecsn2;
 
-.SIG.predictors: imbalance,lastact,pricecols,advncols,notioncal,firstprice,ctminus1;
-.SIG.predictorswithoutt0: ((key .SIG.predictors) where not (key .SIG.predictors) like "*t0*")#.SIG.predictors;
+// sell make it simplier
 
-.STRAT.derivefeaturesandsignalsrequired:{[modeldf;signalcalmap;featurewjmap]
-        signalsselected: exec distinct split_feature from modeldf where split_feature <> `None;
-        usedfeatures: distinct {x where -11h = type each x}  raze value signalsselected#signalcalmap;
-        (usedfeatures:usedfeatures where usedfeatures in key featurewjmap;signalsselected)};
+getsellcandidate: {[r;rankf;qtycol;config]
+notions: ?[r;();0b;(enlist `n)!enlist (*;qtycol;`Price)]`n;
+calibratet: ([] date: exec date from r; rkx: rankf[r]; notion:notions);
+method: config`method;
+qtlN: config`qtlN;
+qltSave: (neg config`qtlSave)  + config`qtlN;
 
-.STRAT.modeldfc1: ("ISSSSSSSSFFFFFFF";enlist ",")  0:\`$":/home/zheshi/workspace/signalQ/researchq/brave3/modeldfc1.csv";
-.STRAT.modeldfc2: ("ISSSSSSSSFFFFFFF";enlist ",")  0:\`$":/home/zheshi/workspace/signalQ/researchq/brave3/modeldfc2.csv";
+if[qltSave = 0; : ![r;();0b; (enlist `Quantity)!enlist qtycol]];
+    mvperiod: config`avgperiod;
+    thrd: select {min x where z = y xrank x}[;qtlN;qltSave] rkx by date from calibratet;
+    thrd: select date, thrdx: (first rkx) ^ 1 xprev mvperiod mavg rkx from thrd;
+    rtn: r where exec rkx >= thrdx from  (calibratet lj `date xkey thrd);
+    :![rtn;();0b; (enlist `Quantity)!enlist qtycol]
+};
 
-.STRAT.loadmodelparams:{[]
-.STRAT.c1features:: .STRAT.derivefeaturesandsignalsrequired[.STRAT.modeldfc1;.SIG.predictorswithoutt0;wjcalcmap][0];
-.STRAT.c2features:: .STRAT.derivefeaturesandsignalsrequired[.STRAT.modeldfc2;.SIG.predictors;wjcalcmap][0];
-.STRAT.c1signals::  .STRAT.derivefeaturesandsignalsrequired[.STRAT.modeldfc1;.SIG.predictorswithoutt0;wjcalcmap][1];
-.STRAT.c2signals::  .STRAT.derivefeaturesandsignalsrequired[.STRAT.modeldfc2;.SIG.predictors;wjcalcmap][1];
-.STRAT.modelf1:: .lgb.buildmodeltokdb[.STRAT.modeldfc1];
-.STRAT.modelf2:: .lgb.buildmodeltokdb[.STRAT.modeldfc2];
+
+
+
+// Aggregate Buy|Sell
+//  Side - 1 or 2 
+// 1. Control 2 (Sell quota, Buy concentration, BSell balance) 2.Peaching - (if ignore the buy sell balance)  3. Performance benchmark, rtn , execessive return etc.
+//  get tradeable lot size based on our "typical" trade size
+getlotsize:{[price;initialstep;normalstep;minlot]
+          lotnotion: price*100.0;
+          inilot: max(`int$initialstep%lotnotion;minlot);
+          if[ (initialstep)> 0.5 * (lotnotion*inilot+1) + (lotnotion*inilot);inilot:inilot+1];
+          nomlot: max(`int$normalstep%lotnotion;minlot);
+          if[ normalstep> 0.5 * (lotnotion*nomlot+1) + (lotnotion*nomlot);nomlot:nomlot+1];
+          :(100*inilot;100*nomlot)};
+
+
+// convert buy sell series to "typical"  trade size
+// X0: (latest target notion; sent out notion; returned qty
+// X1: (signal quantity;signal price; trade time; side;minlot)
+quantifybysymbol: {[X0;X1;ratio;initialstep;normalstep]
+                      minlot:X1[4];
+                      lots: getlotsize[X1[1];initialstep;normalstep;minlot];
+                      acinitstep: lots[0]*X1[1];
+                      acnormalstep: lots[1]*X1[1];
+                      lotonenotion: X1[1]*100.0;
+                      existingtgt: X0[0];
+                      additionaltgt: X1[1]*X1[0]*ratio;
+                      if[X0[1] < 0.001;
+                          newqty: max(lots[0];100 * 1 + `int$ additionaltgt%lotonenotion);
+                          :(additionaltgt;newqty*X1[1];newqty)];
+                      if[ X0[1] >= existingtgt + additionaltgt;
+                          :(existingtgt+additionaltgt;X0[1];0)];
+                      if[ (existingtgt + additionaltgt) <  X0[1] + acnormalstep;
+                          :(existingtgt+additionaltgt;X0[1] + acnormalstep;lots[1])];  
+                      newqty: max(lots[1]; 100 * 1 + `int$ (existingtgt + additionaltgt - X0[1])%lotonenotion);
+                         :(existingtgt + additionaltgt;X0[1] + newqty*X1[1];newqty)};
+
+
+
+// X0 (decideqty, totalbuysell netchange, sellquota, Buy Quota Table )
+// X1 (Price;Side;Quantity;sym) 
+// Side 1 or 2
+
+updaterow:{[X0;X1;poslimit;neglimit;newstockbuylimit]
+                quotaT:X0[3]; 
+                netchange:X0[1];
+                if[X1[1] = `b;
+                  allowqty: max(0.0;100.0 *`int$(poslimit - netchange)%100.0*X1[0]);
+                  allowqty: min(allowqty;100.0 *`int$ (newstockbuylimit^ exec first buyquota from quotaT where sym = X1[3])%100.0*X1[0]);
+                  quantity: min(X1[2];allowqty);
+                  quotaT: update buyquota:buyquota - quantity*X1[0] from quotaT where sym = X1[3];
+                  if[not X1[3] in quotaT`sym; quotaT :quotaT, ([] sym: enlist X1[3]; sellquota: enlist 0; buyquota:enlist newstockbuylimit - quantity*X1[0])];
+                  netchange: netchange + quantity * X1[0];
+                  :(quantity;netchange;exec first buyquota from quotaT where sym = X1[3];quotaT)];
+
+                if[X1[1]=`s;
+                  allowqty: max(0.0;100.0 *`int$(netchange - neglimit)%100.0*X1[0]);
+                  allowqty: min(allowqty;0 ^ exec first sellquota from quotaT where sym = X1[3]);
+                  quantity: min(X1[2];allowqty);
+                  quotaT: update sellquota:sellquota - quantity, buyquota: buyquota + quantity*X1[0] from quotaT where sym = X1[3];
+                  netchange: netchange - quantity * X1[0];
+                  :(quantity;netchange;exec first sellquota from quotaT where sym = X1[3];quotaT)] };
+
+// X0 (qty;bquota;sellquota
+// x1 (Price;Side;Quantity) 
+
+updaterowSingleSym:{[X0;X1]
+                buyquota: X0[1];
+                selquota: X0[2];                 
+
+                if[X1[1] = `b;
+                  allowqty: max(0; 100.0 *`int$ buyquota %100.0*X1[0]);
+                  quantity: min(X1[2];allowqty);
+                  buyquota: buyquota - quantity*X1[0];
+                  :(quantity;buyquota;selquota)];
+
+                if[X1[1] = `s;
+                  allowqty: max(selquota;0);
+                  quantity: min(X1[2];allowqty);
+                  selquota: selquota -  quantity;
+                  buyquota: buyquota + quantity * X1[0];
+                  :(quantity;buyquota;selquota)] };
+
+
+
+//  format of inputs
+//  lastposition  EODnotion from yesterday
+//  quick test, can't take portfolio uupperbaound into consideration
+
+AggregateBuySell:{[lastposition;bssigt;ohlcex;samplerule;porfoliocontrol;buildingporfolio]
+    ratio: samplerule`ratio;
+    initialstep: samplerule`initialstep;
+    normalstep: samplerule`normalstep;
+    useratio: samplerule`useratio;
+
+    expectscale: porfoliocontrol`expectscale;
+    upbound:  porfoliocontrol`ScaleUB;
+    singlestocklimit: porfoliocontrol`singlestocklimit;
+    quicktest: porfoliocontrol`quicktest;
+    BSbalancecontrol: (not quicktest) and porfoliocontrol`BSbalancecontrol;
+    balancecontrollimit: porfoliocontrol`balancecontrollimit;
+
+
+   // build symbol level quota
+   totolnotion: exec sum EODQuantity*close from lastposition lj `date`sym xkey ohlcex;
+   perstocklimit: max(expectscale * singlestocklimit;upbound * singlestocklimit * 0.75);
+   symquota: select sym, sellquota:EODQuantity, buyquota: max(perstocklimit - EODQuantity*close;0) from lastposition lj  `date`sym xkey ohlcex;
+
+   // quantitfy signal table
+   bsigt: `sym`time xasc select from bssigt where Side = `b;
+   quantfunc: {[x;ratio;initialstep;normalstep;f] flip (0.0;0.0;0.0) f[;;ratio;initialstep;normalstep]  \ x };
+   if[useratio;
+   bsigt: delete minlot from update Quantity: quantfunc[;ratio;initialstep;normalstep;quantifybysymbol][flip(Quantity;Price;time;Side;minlot)][2] by sym from update minlot: ?[sym like "688*";2;1] from bsigt;
+   bsigt: select from bsigt where Quantity > 0];
+
+   ssigt: `sym`time xasc select from bssigt where sym in (exec sym from symquota where sellquota>0), Side=`s;
+   if[useratio;
+   ssigt: delete minlot from update Quantity: quantfunc[;ratio;initialstep;normalstep;quantifybysymbol][flip(Quantity;Price;time;Side;minlot)][2] by sym from update minlot: ?[sym like "688*";2;1] from ssigt;
+   ssigt: select from ssigt where Quantity > 0 ];
+
+   // Buy Sell balance control 
+   poslimit: max(upbound - totolnotion ; 0);
+   neglimit: neg totolnotion;
+   if[BSbalancecontrol and not buildingporfolio; poslimit: min(poslimit;expectscale*balancecontrollimit); neglimit: max(neglimit; neg expectscale*balancecontrollimit)];
+
+   if[not quicktest;
+    bstbl: update quota:0 from  `time xasc `Side xdesc ssigt,bsigt; 
+    qtyquota:  flip (0;0;0;symquota) updaterow[;;poslimit;neglimit;perstocklimit]\ exec flip(Price;Side;Quantity;sym) from bstbl;
+    bstbl: update Quantity:qtyquota[0], quota:qtyquota[2] from bstbl;
+    ];
+    if [quicktest;
+    bstbl: update quota:0 from  `sym xasc `Side xdesc `time xasc ssigt,bsigt; 
+    symlist: exec distinct sym from bstbl; 
+    rtnbs: flip (),/ {[bs;symx;symquota;perstocklimit]
+      bsx:select from bs where sym =  symx;
+      bquota: perstocklimit ^ exec first buyquota from  symquota where sym = symx;
+      squota: 0 ^ exec first sellquota from symquota where sym = symx;
+      (0;bquota;squota) updaterowSingleSym \ exec flip(Price;Side;Quantity) from bsx}[ bstbl;;symquota;perstocklimit] peach symlist;
+    bstbl: update Quantity:rtnbs[0], quota:?[Side=`b;rtnbs[1];rtnbs[2]] from bstbl;
+   ];
+    : select from bstbl where Quantity > 0;
+};
+
+
+// trade pnl + execess alpha
+
+idx: `.SSEC`.SZSC;
+idxohlc:  hk (`.ceq.getOhlc;`.SSEC`.SZSC; 2021.04.01; .z.d; ::);
+idxrtn: ungroup select date,indexrtn: -1.0 + (-1 xprev close)%close, indexval:close by idx:sym from idxohlc;
+indexmap: { ?["6" ~ (string x)[0];`.SSEC;`.SZSC]};
+excessrtnmap:{[sym;datex;indexmap;idxrtn]  exec first indexrtn from  idxrtn where date = datex, idx = indexmap[sym]};
+excessrtnmapl:excessrtnmap[;;indexmap;idxrtn];
+excessrtnmapl:{[sym;datex] :0.0};
+
+
+// close qty
+getclosedqty:{[x;y] 
+       if[y[0]>0; :(x[0], ([] builddate:enlist y[1]; quantity: enlist y[0]);x[1])];
+       if[0 = count x[0]; : x];
+       cumqty: sums x[0]`quantity;
+       l12: (0;(count cumqty) ^ first where cumqty > abs y[0] ) _ til count cumqty;
+       closedqty: 0;
+       $[ 0 <  count l12[0];
+       [rtn1: update closedate: y[1] from x[0][l12[0]];closedqty: exec sum quantity from rtn1];
+       rtn1:()];
+       if[0 = count l12[1]; :( 0#x[0]; x[1],rtn1)];
+       rest: x[0][l12[1]];
+       $[(abs y[0]) > closedqty;
+         [ rtn2: update closedate: y[1], quantity:(abs y[0]) - closedqty  from 1#rest; :( update quantity: quantity - (abs y[0]) - closedqty  from rest where i = 0  ;x[1],rtn1,rtn2)  ];
+         [ :(rest;x[1],rtn1)]]};  
+
+getcloseqtypersym:{[X;symx]
+       0N!symx;
+       ys:  exec flip(?[side=`b;quantity;neg quantity];date) from (`date xasc `side xdesc X) where sym = symx ;
+       rtn:  getclosedqty over ((enlist (();())),ys);       
+       if[0 < count rtn[0] ;rtn[0]: update sym:symx from rtn[0]];
+       if[0 < count rtn[1] ;rtn[1]: update sym:symx from rtn[1]];
+       :rtn};
+
+getclosedqtyX:{[X]
+       allrtn: getcloseqtypersym[X;] peach exec distinct sym from X;
+       allrtnf: flip allrtn;
+       :((),/ allrtnf[0]; (),/ allrtnf[1])};
+
+busdayindex:{[allbusday;d1]
+              bd: (asc allbusday)!til count allbusday;
+              @[bd;d1]}; 
+allbusdays: exec distinct date from ohlcex;
+busdayindexp:busdayindex[allbusdays;];
+
+// x ( dict: sym!remaining inventory (buildate,qty)
+// y (sym;net trade quantity; trade date)
+getclosedqtyinventorytable:{[x;y] 
+if[ not y[0] in key x;
+   x[y[0]]: getclosedqty[(();());y[1 2]][0];
+   :x];
+x[y[0]]: getclosedqty[(x[y[0]];()) ;y[1 2]][0];
+:x};
+
+
+// cumtbl (position;trade;closeqtytable)
+UpdatePositionOneDay: {[cumtbl; dateandbstbl; ohlcex;samplerule;porfoliocontrol; porfoliobuilddate;excessrtnmapl]
+       maxinventorydate: porfoliocontrol`maxinventorydate;
+       bstbl: dateandbstbl[1];
+       if[ 0 = count cumtbl[0];
+         lastposition: ([] date: "D"$ ();sym:`$();EODQuantity:`float$());
+         trades: AggregateBuySell[lastposition;bstbl;ohlcex;samplerule;porfoliocontrol;1b];   
+         trades: trades lj `date`sym xkey select date,sym,close from ohlcex;
+         trades: update trdrtn: ?[Side=`b;-1.0 + close%Price;1.0 - close%Price] from trades;
+         newposition:  `date`sym`EODQuantity xcols () xkey select first date, EODQuantity: `float$sum Quantity by sym from trades where Side = `b; 
+         newposition: newposition  lj  `date`sym xkey select date,sym,close,adjnextclose from ohlcex;
+         newposition: update alpha: -1.0 + adjnextclose%close from newposition;  
+         datenow : exec last date from newposition; 
+         newposition: update indexrtn:  excessrtnmapl[;datenow] each sym from newposition;
+         newposition: update exsalpha: alpha - indexrtn from newposition;
+         trades: update quota:0.0, purpose:`n from select from trades where Side=`b;
+         closeqtytable:  () xkey select builddate:datenow, quantity:sum Quantity by sym  from trades;
+         :(newposition;trades;closeqtytable)];
+
+
+       lastposition:select from cumtbl[0] where date = last date;
+       0N! exec last date from cumtbl[0];
+       buildportfolio: (exec last date from cumtbl[0]) < porfoliobuilddate;
+
+       newposition: update date:dateandbstbl[0] from select from cumtbl[0] where date = last date;
+       trades:();
+
+       closeqtytable: cumtbl[2];
+
+       if [0 < count bstbl;
+       trades: AggregateBuySell[lastposition;bstbl;ohlcex;samplerule;porfoliocontrol;buildportfolio];
+       trades: update purpose:`n from trades;
+       ys: exec flip (sym;quantity;date) from () xkey select last date, quantity:neg sum Quantity by sym from trades where Side <> `b ;
+       xclsqty:(exec flip `builddate`quantity! (builddate;quantity) by sym from  closeqtytable);
+       latestcloseqtytable:  getclosedqtyinventorytable over ((enlist xclsqty), ys);
+       closeqtytable: ungroup {({(enlist `sym)! x} each enlist each key x) ,'  flip each value x}  {    id: where 0 < count each x; id!@[ x;id] } latestcloseqtytable];
+
+       if[0 < count closeqtytable;
+        inventorymanagetrades: () xkey select date: dateandbstbl[0],  time: 24t, Side:`s, Quantity: sum quantity, Price: 0nf, quota: 0nf by sym from closeqtytable where busdayindexp[builddate] < busdayindexp[dateandbstbl[0]] - maxinventorydate;
+        trades: trades, update purpose: `inventory from inventorymanagetrades;
+        closeqtytable: select from closeqtytable where busdayindexp[builddate] >= busdayindexp[dateandbstbl[0]] - maxinventorydate;
+        ];
+
+       if[0 < count trades;
+       trades: trades lj `date`sym xkey select date,sym,close from ohlcex;
+       trades: update Price: close ^ Price from trades;
+       trades: update trdrtn: ?[Side=`b;-1.0 + close%Price;1.0 - close%Price] from trades;
+       newdate: (first trades`date);
+       netposition: select netpositionchange: sum ?[Side=`b;Quantity;neg Quantity] by sym from trades;
+       newposition: lastposition lj netposition;
+       newstockinclusion: select from netposition where not sym in (exec distinct sym from lastposition);
+       newposition: select date: newdate, sym, EODQuantity: EODQuantity + 0 ^ netpositionchange from newposition;
+       newposition: newposition, select date: newdate, sym, EODQuantity: netpositionchange from newstockinclusion;
+
+       ys: exec flip (sym;quantity;date) from () xkey select last date, quantity: sum Quantity by sym from trades where Side = `b ;
+       xclsqty:(exec flip `builddate`quantity! (builddate;quantity) by sym from  closeqtytable);
+       latestcloseqtytable:  getclosedqtyinventorytable over ((enlist xclsqty), ys);
+       closeqtytable: ungroup {({(enlist `sym)!x} each enlist each key x) ,'   flip each value x}  {    id: where 0 < count each x; id!@[ x;id] } latestcloseqtytable       
+       ];
+
+       newposition: newposition  lj  `date`sym xkey select date,sym,close,adjnextclose from ohlcex;
+       newposition: update alpha: -1.0 + adjnextclose%close from newposition;  
+       datenow : exec last date from newposition; 
+       newposition: update indexrtn:  excessrtnmapl[;datenow] each sym from newposition;
+       newposition: update exsalpha: alpha - indexrtn from newposition;        
+
+       :(cumtbl[0],newposition;cumtbl[1],trades;closeqtytable)};
+testrtn4:test1[0]
+
+getporfoliosummary:{[testrtn4;acdetails]
+notiont: select sum EODQuantity*close by date from testrtn4[0];
+x1: select (EODQuantity*close) wavg alpha, (EODQuantity*close) wavg exsalpha from testrtn4[0];
+x2: select trdertn: (Quantity*Price) wavg trdrtn, tradertnnet: -0.0011 + (Quantity*Price) wavg trdrtn, avgdaiytrade: (count sym)%(count distinct date),avgdailybuytrade: (sum Side = `b)%(count distinct date),avgdailyselltrade: (sum not Side = `b)%(count distinct date), avgtradenotion: avg Quantity*Price, totaltradenotion: sum Quantity*Price from testrtn4[1];
+x3: select ntrdertn: (Quantity*Price) wavg trdrtn from testrtn4[1] where purpose = `n;
+inventorytrade: exec (sum ?[purpose = `n;0;(Quantity*Price)])%(sum (Quantity*Price))  from testrtn4[1];
+x4: select c1notion:sum ?[Account=`C35831;Quantity*Price;0], c2notion:sum ?[Account<>`C35831;Quantity*Price;0], c1buynotion:sum ?[(Account=`C35831) and Side=`b;Quantity*Price;0], c2bnotion:sum ?[(Account<>`C35831) and Side=`b;Quantity*Price;0],c1brtn: ?[(Account=`C35831) and Side=`b;Quantity*Price;0] wavg ?[(Account=`C35831) and Side=`b;trdrtn;0nf] ,c2brtn: ?[(Account<>`C35831) and Side=`b;Quantity*Price;0] wavg ?[(Account<>`C35831) and Side=`b;trdrtn;0nf]  from testrtn4[1] lj acdetails;
+t1: select cn :sum EODQuantity*close, pospnl: sum EODQuantity*close*exsalpha  by date from testrtn4[0];
+t2: select tn: sum Quantity*Price, trdertn: (Quantity*Price) wavg trdrtn, trdpnl: sum (Quantity*Price) * (-0.0011 + trdrtn) by date from  testrtn4[1];
+turnover: exec (avg tn)%(avg cn) from (t1 lj t2) where not null tn;
+turnoverdev: exec dev ( tn% cn) from (t1 lj t2) where not null tn;
+sharp: exec (avg pospnl + trdpnl)%(dev pospnl + trdpnl) from (t1 lj t2) ;
+avgnotion: exec avg cn from t1;
+dailytradesharp: exec (avg trdertn)% (dev trdertn) from t2;
+summaryt1: update turnover:turnover,turnoverstd: turnoverdev, totalreturn: exsalpha +  turnover*tradertnnet, annualrtn: 250* exsalpha +  turnover*tradertnnet, dailytradesharp:dailytradesharp, overallsharp:sharp, inventtrade: inventorytrade from flip (flip x2), (flip x1),(flip x3),(flip x4);
+summaryt2: select date, notion:cn, turnover: tn%cn, trdertn , tradertnnet from  ((t1 lj t2) lj select trdertn: (Quantity*Price) wavg trdrtn, tradertnnet: -0.0011 + (Quantity*Price) wavg trdrtn by date from testrtn4[1]);
+// return by 2 months
+t3c1: (select  alpha: sum (EODQuantity*close) *  alpha, exsalpha : sum (EODQuantity*close) *  exsalpha, notion: sum   (EODQuantity*close) by 2 xbar `month$date from testrtn4[0]);
+t3c2: select trdertn: sum (Quantity*Price) * trdrtn, tradertnnet: sum   (Quantity*Price) * (-0.0011 + trdrtn) by 2 xbar `month$date  from testrtn4[1];
+summaryt3:  update totalrtn: (exsalpha + tradertnnet), totalrtnpct: (exsalpha + tradertnnet)%notion from t3c1 lj t3c2;
+:(summaryt1;summaryt2;summaryt3)};
+
+SplitData: {[b;s;d] (d;(select date,sym,time,Side ,Quantity,Price from b where date = d),(select date,sym,time,Side ,Quantity,Price from s where date = d))};
+
+samplerule: `ratio`initialstep`normalstep`useratio ! (0.1;1e4;5e3;1b)
+porfoliocontrol: `expectscale`ScaleUB`singlestocklimit`quicktest`BSbalancecontrol`balancecontrollimit`maxinventorydate`porfoliobuildperiod!(2.0e7;2.2e7;0.03;0b;0b;0.3;12;5)
+signalconfig:`c1notion`c1tgt`c2notion`c2tgt`mvdays!(1.2e8;`predrtn;6e7;`predrtn;10);
+
+
+GetTheThreshold:{[predictiont;notion;mvdays;sortcol]
+    t1: ?[ update cumnotion:sums Price*Quantity by date from (`date;sortcol) xdesc predictiont;();(enlist `date)!enlist `date;(enlist `threshold)!enlist ({[x;y;z] last x where y <= z }[;;notion];sortcol;`cumnotion)];
+    t2: select date, st: 1 xprev mvdays mmin date, et: 1 xprev mvdays mmax date, threshold: 1 xprev mvdays mavg threshold from `date xasc t1;
+    :( t2)
  };
 
+select from ohlcex where sym = `000002
+testdaterange:(2022.04.01;2023.03.24)
 
-.STRAT.k1: 0.0001856159;
-.STRAT.k2: 0.0003301181;
-.STRAT.loadmodelparams[];
+TestPortfolioJoin2:{[fitc1;fitc2;sell;ohlcex;samplerule;porfoliocontrol;signalconfig;testdaterange]
+thrd1: GetTheThreshold[fitc1;signalconfig`c1notion;signalconfig`mvdays;signalconfig`c1tgt ];
+thrd1: update threshold: ?[threshold<0.002;0.002;threshold]  from thrd1;
+thrd2: GetTheThreshold[fitc2;signalconfig`c2notion;signalconfig`mvdays;signalconfig`c2tgt];
+thrd2: update threshold: ?[threshold<0.004;0.004;threshold]  from thrd2;
 
-.STRAT.getpredrtn:{[caculatedfeatures;modellabel]
+testdates: exec distinct date from ohlcex where date within ( max (min fitc1`date;min fitc2`date); min (max fitc1`date;max fitc2`date)), date within testdaterange;
+porfoliobuilddate: @[asc testdates; porfoliocontrol`porfoliobuildperiod];
+b1: ?[  fitc1 lj `date xkey thrd1 ;((>=;signalconfig`c1tgt ;`threshold);({x within y}[;testdaterange] ;`date));0b;(`date`time`sym`Quantity`Price`Side)!(`date;`time;`sym;`Quantity;`Price;enlist `b)];
+b2: ?[  fitc2 lj `date xkey thrd2 ;((>=;signalconfig`c2tgt ;`threshold);({x within y}[;testdaterange] ;`date));0b;(`date`time`sym`Quantity`Price`Side)!(`date;`time;`sym;`Quantity;`Price;enlist `b)];
+x: (();();()) UpdatePositionOneDay[;;ohlcex;samplerule;porfoliocontrol; porfoliobuilddate;excessrtnmapl]/ SplitData[`date`time xasc b1,b2;sell;] each asc testdates;
+acdetails: (select Account:`C35831 by date, sym from fitc1), (select Account:`C31448 by date, sym from fitc2);
+summary: getporfoliosummary[x;acdetails];
+:(x;summary)};
 
-    $[modellabel=1; [features: .STRAT.c1features; signals:.STRAT.c1signals; signalfulmap:.SIG.predictorswithoutt0; k: .STRAT.k1;
-                     modelf:.STRAT.modelf1   ];
-                    [features: .STRAT.c2features; signals:.STRAT.c2signals; signalfulmap:.SIG.predictors; k: .STRAT.k2  ;
-                     modelf:.STRAT.modelf2   ]];    
-     calculatedsignals: ?[caculatedfeatures;();0b;signals#signalfulmap];
-     predrtncol: select date,time,sym,Quantity, Price, rtn , predrtn: (k * log Quantity*Price)  + modelf[calculatedsignals] from caculatedfeatures;
-     :predrtncol
- };
+benchmarkporf: ("FFFPFFFFFFFFFFFFFFFF";enlist ",") 0:/ `$":/home/zheshi/workspace/signalQ/researchq/brave3/AllPerformance.csv";
+benchmarkporf: update date:`date$date from benchmarkporf;
+select  notion: med  pospnl%posrtn, notion2: avg pospnl%posrtn, avg alpha, totalposrtn: sum alpha + bmindexrtn, sum bmindexrtn, mmasum: sum mmartnpnl%mmartn, qfiisum: sum qfiirtnpnl%qfiirtn   from benchmarkporf where date <2023.03.24
+
+signalconfig:`c1notion`c1tgt`c2notion`c2tgt`mvdays!(1.1e8;`predrtn;8e7;`predrtn;10);
 
 
-fitc1: .STRAT.getpredrtn[select from rtnorig where Side = `b, Account = `C35831, Price>0 ;1];
-fitc2: .STRAT.getpredrtn[select from rtnorig where Side = `b, Account = `C31448, Price>0 ;2];
-.Q.gc[];
-maxof:{?[x>y;x;y]};
-minof:{?[x<y;x;y]};
 
-// select (Quantity*Price) wavg rtn, sum Quantity*Price by predrtn>0.00285 from fitc1 where date within (2022.04.01,2023.03.30)
-// select (Quantity*Price) wavg rtn, sum Quantity*Price by predrtn>0.0043 from fitc2 where date within (2022.04.01,2023.03.30)
- select minof[maxof[Quantity*Price; (exp  predrtn%k1)];max Quantity*Price] wavg rtn, avg rtn,sum minof[maxof[Quantity*Price; (exp  predrtn%k1)];max Quantity*Price]  ,sum Quantity*Price by predrtn>0.0025 from fitc1 where date within (2022.04.01,2023.03.30)
-select from dailydata where date = first date
+sell: select date,sym, time, Side, Account, Price, Quatity from rtnorig where Side = `s;
+test1: TestPortfolioJoin2[fitc1;fitc2;sell;ohlcex;samplerule;porfoliocontrol;signalconfig;(2022.04.01;2023.03.24)]
 
- select (Quantity*Price) wavg rtn, sum Quantity*Price by predrtn>0.00285 from fitc1 where date within (2022.04.01,2023.03.30)
+(select   (EODQuantity*close) wavg -1.0 + adjnextclose%close by 4 xbar `month$date from test1[0][0] where EODQuantity > 0) lj select avg alpha + bmindexrtn by 4 xbar `month$date from benchmarkporf
+
+
+select from  test1[0][0] where date = 2022.04.22, EODQuantity > 0
+
+
+
+TestPortfolio:{[r0;r0s;ohlcex;samplerule;porfoliocontrol;signalconfig1;signalconfig2]
+testdates: exec distinct date from ohlcex where date within ( max (min r0`date;min r0s`date); min (max r0`date;max r0s`date));
+porfoliobuilddate: @[asc testdates; porfoliocontrol`porfoliobuildperiod];
+rkf1: signalconfig`brankfun;
+rkf2: signalconfig`srankfun;
+qtycol1: signalconfig`bqtycol;
+qtycol2: signalconfig`sqtycol;
+rb: getbuycandidate[r0;rkf1;qtycol1;signalconfig];
+rs: getsellcandidate[r0s;rkf2;qtycol2;signalconfig];
+x: (();();()) UpdatePositionOneDay[;;ohlcex;samplerule;porfoliocontrol; porfoliobuilddate;excessrtnmapl]/ SplitData[rb;rs;] each asc testdates;
+summary: getporfoliosummary[x];
+:(x;summary)};
+
+rkf:{[x;k] exec predrn + k * predalpha from x};
+rfsimple: { exec predrn from x};
+origcol:  `date`time`sym`Side`Quantity`Price`rtn`rt1alpha;
+rs1: ?[r1s;();0b;origcol!origcol];
+rs1: update predrn: 0nf from rs1;
+rs2: ?[r2s;();0b;origcol!origcol];
+rs2: update predrn: 0nf from rs2;
+getrbfrommodel:{[r1b;modelname;features;origcol;k]
+            testx: ?[r1b;();0b;features];
+            predtesty : .lgb.predict(modelname;testx);
+            rtnr: ?[r1b;();0b;origcol!origcol];
+            rtnr: update predrn: predtesty + k * log Quantity*Price from rtnr};
+
+testx: ?[select from r2b where date = 2022.03.05, sym =   ;();0b;predictors];
+
+
+
+
+// rst
+testgroup2_
+k2
+
+// Decide
+mdparam: `num_leaves`verbose`metric`train_metric`num_threads`task`learning_rate`is_unbalance`max_bin`objective`boosting_type`max_depth`tree_learner! (14;-1;`l1;1b;30;`train;0.3;`true;256;`regression;`gbdt;5;`serial);
+fitlatest: trainmodel_cachedf[mdparam;`fullmodel1;3;r1b;`r1predictors;`r1predictee;splittraintestbydate[2022.03.23];origcol];
+mdparam: `num_leaves`verbose`metric`train_metric`num_threads`task`learning_rate`is_unbalance`max_bin`objective`boosting_type`max_depth`tree_learner! (14;-1;`l1;1b;30;`train;0.3;`true;256;`regression;`gbdt;5;`serial);
+fitlatest2: trainmodel_cachedf[mdparam;`fullmodel2;3;r2b;`r2predictors;`r2predictee;splittraintestbydate[2022.03.23];origcol];
+
+rb1: getrbfrommodel[r1b;`fullmodel1;predictorswithoutt0;origcol;k1];
+samplerule: `ratio`initialstep`normalstep`useratio ! (0.05;1e4;5e3;1b);
+porfoliocontrol: `expectscale`ScaleUB`singlestocklimit`quicktest`BSbalancecontrol`balancecontrollimit`maxinventorydate`porfoliobuildperiod!(1e7;1.5e7;0.03;0b;0b;0.3;12; 12);
+test11: TestPortfolio[rb1;rs1;ohlcex;samplerule;porfoliocontrol;`method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.0;10;rfsimple;rfsimple;`Quantity;`Quantity)];
+
+// r0: `rb1; r0s: rs1;signalconfig:`method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.0;10;rfsimple;rfsimple;`Quantity;`Quantity)
+rb2: getrbfrommodel[r2b;`fullmodel2;predictors;origcol;k2];
+samplerule: `ratio`initialstep`normalstep`useratio ! (0.05;1e4;5e3;1b);
+porfoliocontrol: `expectscale`ScaleUB`singlestocklimit`quicktest`BSbalancecontrol`balancecontrollimit`maxinventorydate`porfoliobuildperiod!(1e7;1.5e7;0.03;0b;0b;0.3;12; 12);
+test12: TestPortfolio[rb2;rs2;ohlcex;samplerule;porfoliocontrol;`method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.0;10;rfsimple;rfsimple;`Quantity;`Quantity)];
+
+
+testsummary: getporfoliosummary[(`date xasc test11[0][0],test12[0][0];`date`time xasc test11[0][1],test12[0][1])];
+
+
+
+modeldfc1:  .lgb.modeltodf (`fullmodel1;1);
+modeldfc2:  .lgb.modeltodf (`fullmodel2;1);
+
+
+select avg notion, (dev notion)%avg notion from test11[1][1]
+select avg notion,(dev notion)%avg notion from test12[1][1]
+select avg notion,(dev notion)%avg notion from testsummary[1]
+cbtrade: `date`time xasc test11[0][1],test12[0][1]
+
+
+
+fitlatest: trainmodel_cachedf[mdparam;`fullmodel1;3;r1b;`r1predictors;`r1predictee;splittraintestbydate[2022.03.25];origcol];
+fitlatest2: trainmodel_cachedf[mdparam;`fullmodel2;3;r2b;`r2predictors;`r2predictee;splittraintestbydate[2022.03.25];origcol];
+
+
+
+
+
+getclosedateanalysis:{[X]
+testx: getclosedqtyX[X];
+select avg inventorytime, med inventorytime, notion wavg inventorytime, {min x where (y - 1) = y xrank x}[;10] inventorytime ,  {min x where (y - 1) = y xrank x}[;20] inventorytime, notionwqtl: priceqtl[inventorytime;notion;20],   max inventorytime from select notion:close*quantity, inventorytime: (busdayindexp closedate) - (busdayindexp builddate) from testx[1] lj `builddate`sym xkey select builddate:date,sym,close from  ohlcex };
+getclosedateanalysis[select from C1X2 where date > 2021.04.07]
+getclosedateanalysis[() xkey select quantity: sum Quantity by date, side:Side, sym from testrtn4[1]]
+
+.Q.gc[]
+
+
+
+
+dateandbstbl: SplitData[rb;rs;2021.04.08]
+
+samplerule: `ratio`initialstep`normalstep`useratio ! (0.1;1e4;5e3;0b)
+porfoliocontrol: `expectscale`ScaleUB`singlestocklimit`quicktest`BSbalancecontrol`balancecontrollimit`maxinventorydate`porfoliobuildperiod!(1e10;1e10;0.05;1b;0b;0.3;12; 12)
+signalconfig: `method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.3;10;rkf[;0.0];rfsimple;`Quantity;`Quantity);
+// test b/s qty, change or not; test selection function 
+config: `method`qtlN`avgperiod`fixnotionfactor`qtlSave!(`ConstQtlCount;10;10;1.0;10);
+getpredrtn:{exec predrn from x};
+
+// select (Quantity*Price) wavg rtn , avg rtn from getbuycandidate[r0;rkf;bqf;config]
+
+
+test0: TestPortfolio[r0;r0s;ohlcex;samplerule;porfoliocontrol;`method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.7;10;rkf[;0.0];rfsimple;`Quantity;`Quantity)];
+test1: TestPortfolio[r0;r0s;ohlcex;samplerule;porfoliocontrol;`method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.3;10;rkf[;0.0];rfsimple;`Quantity;`Quantity)];
+test2: TestPortfolio[r0;r0s;ohlcex;samplerule;porfoliocontrol; `method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.7;10;rkf[;0.0];rfsimple;buyquantityadjf[`Quantity;`predrn;`Price;k1;3.0;0.5];`Quantity)];
+test3: TestPortfolio[r0;r0s;ohlcex;samplerule;porfoliocontrol; `method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;2.0;10;rkf[;0.0];rfsimple;buyquantityadjf[`Quantity;`predrn;`Price;k1;3.0;0.5];`Quantity)];
+test4: TestPortfolio[r0;r0s;ohlcex;samplerule;porfoliocontrol; `method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.7;10;rkf[;0.3];rfsimple;buyquantityadjf[`Quantity;`predrn;`Price;k1;3.0;0.5];`Quantity)];
+test5: TestPortfolio[r0;r0s;ohlcex;samplerule;porfoliocontrol; `method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;2.0;10;rkf[;0.3];rfsimple;`Quantity;`Quantity)];
+test6: TestPortfolio[r0;r0s;ohlcex;samplerule;porfoliocontrol; `method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.3;10;rkf[;0.3];rfsimple;`Quantity;`Quantity)];
+test7: TestPortfolio[r0;r0s;ohlcex;samplerule;porfoliocontrol;`method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.0;10;rkf[;0.0];rfsimple;`Quantity;`Quantity)];
+
+test8: TestPortfolio[r0;r0s;ohlcex;samplerule;porfoliocontrol;`method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.0;10;rkf[;0.0];rfsimple;`Quantity;`Quantity)];
+
+
+system "ls"
+k2
+
+
+rkf1: signalconfig`brankfun;
+rkf2: signalconfig`srankfun;
+qtycol1: signalconfig`bqtycol;
+qtycol2: signalconfig`sqtycol;
+
+thrd: getbuycandidatedebug[rb1;rfsimple;`Quantity;`method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.0;10;rfsimple;rfsimple;`Quantity;`Quantity)];
+thrd2: getbuycandidatedebug[rb2;rfsimple;`Quantity;`method`qtlN`avgperiod`fixnotionfactor`qtlSave`brankfun`srankfun`bqtycol`sqtycol!(`MVFixNotion;10;10;1.0;10;rfsimple;rfsimple;`Quantity;`Quantity)];
+
+.STRAT.porfoliothreshold1
+
+
+ select count sym from rb1 where date = 2022.03.25
+ select count sym from rb2 where date = 2022.03.25
+
+
+correctcopy: select from rb2 where date = 2022.03.25
+
+
+hb: hopen `:xhkg6696dap.hkg.swissbank.com:8949::
+
+test : hb "select from .STRAT.filterbuy2"
+
+update diff: predrtnx - predrn from select from (correctcopy lj `time`sym xkey (select time,sym, predrtnx: predrtn from test)) where  not null predrtnx
+
+select from rtnx where date = 2022.03.25, sym = `300182.SZ
+
