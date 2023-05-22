@@ -1,0 +1,161 @@
+// Expand function
+expwjf:{[f;args;newname] 
+         (enlist f),args, newname};
+
+// Apply Function to Varianble in Certian Filters :    f( x ) where f1(c1), f2(c2), f3(c3)......
+// Extend to further variable cases:      f(x,y)  where f1(c1), f2(c2), f3(c3)......
+// So,   max you can parse [f;x;y;z;...;c1;c2;c3..;(f1;fi)]  Variable Nums + Constraints Nums <= 6
+       
+applyf1_1:{[f;constraints]
+ :{[f;x;x1;constraints]
+   loc:constraints[0][x1];
+   :f[x where loc]}[f;;;constraints]
+ };
+applyf1_2:{[f;constraints]
+:{[f;x;x1;x2;constraints]
+   loc:(constraints[0][x1]) and (constraints[1][x2]);
+   :f[x where loc]}[f;;;;constraints]
+ };
+applyf1_3:{[f;constraints]
+:{[f;x;x1;x2;x3 ;constraints]
+   loc:(constraints[0][x1]) and (constraints[1][x2]) and (constraints[2][x3]);
+   :f[x where loc]}[f;;;;;constraints]
+ };
+
+// more 
+applyf2_1:{[f;constraints]
+:{[f;x;y; x1 ;constraints]
+   loc:(constraints[0][x1]);
+   :f[x where loc;y where loc]}[f;;;;constraints]
+ };
+applyf2_2:{[f;constraints]
+:{[f;x;y;x1;x2 ;constraints]
+   loc:(constraints[0][x1]) and (constraints[1][x2]);
+   :f[x where loc;y where loc]}[f;;;;;constraints]
+ };
+applyf2_3:{[f;constraints]
+:{[f;x;y;x1;x2 ;constraints]
+   loc:(constraints[0][x1]) and (constraints[1][x2]) and (constraints[2][x3]);
+   :f[x where loc;y where loc]}[f;;;;;;constraints]
+ };
+// 
+applyf3_1:{[f;constraints]
+:{[f;x;y;z;x1 ;constraints]
+   loc:(constraints[0][x1]);
+   :f[x where loc;y where loc;z where loc]}[f;;;;;constraints]
+ };
+applyf3_2:{[f;constraints]
+:{[f;x;y;z;x1;x2 ;constraints]
+   loc:(constraints[0][x1]) and (constraints[1][x2]);
+   :f[x where loc;y where loc;z where loc]}[f;;;;;;constraints]
+ };
+applyf3_3:{[f;constraints]
+:{[f;x;y;z;x1;x2;x3 ;constraints]
+   loc:(constraints[0][x1]) and (constraints[1][x2]) and (constraints[2][x3]);
+   :f[x where loc;y where loc;z where loc]}[f;;;;;;;constraints]
+ };
+
+applyf4_1:{[f;constraints]
+:{[f;x;y;z;w;x1 ;constraints]
+   loc:(constraints[0][x1]);
+   :f[x where loc;y where loc;z where loc;w where loc]}[f;;;;;;constraints]
+ };
+
+applyf4_2:{[f;constraints]
+:{[f;x;y;z;w;x1;x2 ;constraints]
+   loc:(constraints[0][x1]) and (constraints[1][x2]);
+   :f[x where loc;y where loc;z where loc;w where loc]}[f;;;;;;;constraints]
+ };
+
+applyf5_1:{[f;constraints]
+:{[f;x;y;z;w;v;x1 ;constraints]
+   loc:(constraints[0][x1]);
+   :f[x where loc;y where loc;z where loc;w where loc;v where loc]}[f;;;;;;constraints]
+ };
+
+
+
+// Rest should be fine
+// seems not very useful
+applyf1_4:{[f;constraints]
+ };
+applyf1_5:{[f;constraints]
+ };
+applyf2_4:{[f;constraints]
+ };
+applyf2_5:{[f;constraints]
+ };
+
+
+// EXPAND THESE INTO F
+applyfwjafterconstrain :{[f;applycol;filtercol;constraints;newname]
+n:count applycol;
+m:count filtercol;
+if[(n=1)and(m=1);
+:(enlist {[f;x;x1;name]f[x;x1]}[applyf1_1[f;constraints];;;]),applycol,filtercol,enlist newname;
+];
+if[(n=1)and(m=2);
+:(enlist {[f;x;x1;x2;name]f[x;x1;x2]}[applyf1_2[f;constraints];;;;]),applycol,filtercol,enlist newname;
+];
+if[(n=1)and(m=3);
+:(enlist {[f;x;x1;x2;x3;name]f[x;x1;x2;x3]}[applyf1_3[f;constraints];;;;;]),applycol,filtercol,enlist newname;
+];
+if[(n=1)and(m=4);
+:(enlist {[f;x;x1;x2;x3;x4;name]f[x;x1;x2;x3;x4]}[applyf1_4[f;constraints];;;;;;]),applycol,filtercol,enlist newname;
+];
+if[(n=2)and(m=1);
+:(enlist {[f;x;y;x1;name]f[x;y;x1]}[applyf2_1[f;constraints];;;;]),applycol,filtercol,enlist newname;
+];
+if[(n=2)and(m=2);
+:(enlist {[f;x;y;x1;x2;name]f[x;y;x1;x2]}[applyf2_2[f;constraints];;;;;]),applycol,filtercol,enlist newname;
+];
+if[(n=2)and(m=3);
+:(enlist {[f;x;y;x1;x2;x3;name]f[x;y;x1;x2;x3]}[applyf2_3[f;constraints];;;;;;]),applycol,filtercol,enlist newname;
+];
+if[(n=3)and(m=1);
+:(enlist {[f;x;y;z;x1;name]f[x;y;z;x1]}[applyf3_1[f;constraints];;;;;]),applycol,filtercol,enlist newname;
+];
+if[(n=3)and(m=2);
+:(enlist {[f;x;y;z;x1;x2;name]f[x;y;z;x1;x2]}[applyf3_2[f;constraints];;;;;;]),applycol,filtercol,enlist newname;
+];
+if[(n=3)and(m=3);
+:(enlist {[f;x;y;z;x1;x2;x3;name]f[x;y;z;x1;x2;x3]}[applyf3_3[f;constraints];;;;;;;]),applycol,filtercol,enlist newname;
+];
+if[(n=4)and(m=1);
+:(enlist {[f;x;y;z;u;x1;name]f[x;y;z;u;x1]}[applyf4_1[f;constraints];;;;;;]),applycol,filtercol,enlist newname;
+];
+if[(n=4)and(m=2);
+:(enlist {[f;x;y;z;u;x1;x2;name]f[x;y;z;u;x1;x2]}[applyf4_2[f;constraints];;;;;;;]),applycol,filtercol,enlist newname;
+];
+if[(n=5)and(m=1);
+:(enlist {[f;x;y;z;u;v;x1;name]f[x;y;z;u;v;x1]}[applyf5_1[f;constraints];;;;;;;]),applycol,filtercol,enlist newname;
+];
+:`;
+};
+
+// make up table --- Calc table  ----  WJWindow; Calc; Nameconventions; ApplyTable ?
+//   | TableName; WJwindow;  FeaturePrefix ; ApplyFunction And Args[ FeatureName ] |  --- this should be 1 row
+//  Eventually new FeatureName will be  WJNum + FeaturePrefix + FeatureName
+
+process1win: {[tgtx;infotable;iter;iteritem]
+  w: iteritem`win;       
+  : delete time from wj1[ $[w=0W; ((count tgtx)#0t;tgtx`time); (tgtx`time) +/: (neg w; 0) * 60 * 1000];
+      `time; tgtx; (enlist infotable), first value iter[iteritem]]
+};
+
+process1table: {[tgtx;tablesource;iter; iterkey; tableid]
+    winstoprocess: select from iterkey where table = tableid;
+    :{x,'y} over process1win[tgtx;tablesource[tableid];iter;] each winstoprocess
+};
+
+ApplyWJTable:{[tgtx;tablesource;wjtable]
+ nameprefix: (?[0W = wjtable`win; (count wjtable)#enlist "wall"; "w",/:  string  wjtable`win]),' string wjtable`prefix;
+ wjtable: 
+ wjtable: update prefix: nameprefix, funele:   { { (-1 _ x), `$ y, (string last x) }'[x;y]  }[funele; nameprefix]     from wjtable;
+ iter: select funele by table, win from wjtable;
+ iterkey: `table`win xasc key iter;
+ itertables: exec distinct table from iterkey;
+ :{x,'y} over (enlist tgtx), process1table[select time from tgtx;tablesource;iter; iterkey; ] each itertables ;
+};
+
+
