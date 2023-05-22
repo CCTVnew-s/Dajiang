@@ -1,0 +1,64 @@
+// imbl-- need imbalance
+// adv -- need adv normalization
+// sig 00 will be out
+// Price, normalized by price
+// Pxqtls ~~ need qtl calculation normalization
+//  Side need to normalzied by = `b
+
+accountsidestats:{[sidecol;accol;tgtside]
+            if[0 = count sidecol;:0i]; 
+            sum value  {[x;y] y ~ asc distinct x}[; tgtside] each sidecol group accol};
+
+getExecAcgroupBasicFeature1:{[acgroup;wjwins;prefix]
+   idfun : {[x;y] x=y}[;acgroup];
+   funcs: (enlist applyfwjafterconstrain[sum;enlist `Quantity; `accategory`Side; (idfun ;{x=`b});`sumvoladvimblb]),
+          (enlist applyfwjafterconstrain[sum;enlist `Quantity; `accategory`Side; (idfun ;{x=`s});`sumvoladvimbls]),
+          (enlist applyfwjafterconstrain[{sum x*y};`Quantity`Price; `accategory`Side; (idfun ;{x=`b});`sigsumnotionb]),
+          (enlist applyfwjafterconstrain[{sum x*y}; `Quantity`Price; `accategory`Side; (idfun ;{x=`s});`sigsumnotions]),
+          (enlist applyfwjafterconstrain[{?[0<count x;x wavg y;0nf]}; `Quantity`Price; `accategory`Side; (idfun ;{x=`b});`avgpriceb]),
+          (enlist applyfwjafterconstrain[{?[0<count x;x wavg y;0nf]}; `Quantity`Price; `accategory`Side; (idfun ;{x=`s});`avgprices]),
+          (enlist applyfwjafterconstrain[{?[0<count x;min x;0nf]};enlist `Price; `accategory`Side; (idfun ;{x=`b});`minpriceb]),
+          (enlist applyfwjafterconstrain[{?[0<count x;min x;0nf]};enlist `Price; `accategory`Side; (idfun ;{x=`s});`minprices]),
+          (enlist applyfwjafterconstrain[{?[0<count x;max x;0nf]};enlist `Price; `accategory`Side; (idfun ;{x=`b});`maxpriceb]),
+          (enlist applyfwjafterconstrain[{?[0<count x;max x;0nf]};enlist `Price; `accategory`Side; (idfun ;{x=`s});`maxprices]),
+          (enlist applyfwjafterconstrain[{?[0<count x;last x;`]};enlist `Side; enlist `accategory; (enlist idfun );`lastside]),
+          (enlist applyfwjafterconstrain[{?[0<count x;last x;0nf]};enlist `Price; enlist `accategory; (enlist idfun );`lastprice]),
+          (enlist applyfwjafterconstrain[{?[0<count x; count distinct x;0]};enlist `Account; `accategory`Side; (idfun ;{x=`b});`signumacb]),
+          (enlist applyfwjafterconstrain[{?[0<count x; count distinct x;0]};enlist `Account; `accategory`Side; (idfun ;{x=`s});`signumacs]);
+ : {`table`win`prefix`funele!x} each raze (`executed,/: wjwins,'prefix) ,/:\: enlist each funcs ;};
+
+
+priceqtl:{[price;qty;splitN]
+            qtyqtl: (1 + til splitN - 1) * (1.0%splitN) *  sum qty;
+            sortqty: qty iasc price;
+            reverse 1 _ fills reverse value (til splitN )#max each (asc price) group sum each (sums sortqty) >\: qtyqtl};
+
+// Qtls 
+getExecQtlsQuantNonQuant:{[wjwins;prefix]
+   funcs: (enlist applyfwjafterconstrain[{?[0<count x;priceqtl[x;y;5];5#0nf]};`Price`Quantity; `accategory`Side; ({not x = `other} ;{x=`b});`nonquantPxqtlsb]),
+          (enlist applyfwjafterconstrain[{?[0<count x;priceqtl[x;y;5];5#0nf]};`Price`Quantity; `accategory`Side; ({not x = `other} ;{x=`s});`nonquantPxqtlss]),
+          (enlist applyfwjafterconstrain[{?[0<count x;priceqtl[x;y;5];5#0nf]};`Price`Quantity; `accategory`Side; ({x = `other} ;{x=`b});`quantPxqtlsb]),
+          (enlist applyfwjafterconstrain[{?[0<count x;priceqtl[x;y;5];5#0nf]};`Price`Quantity; `accategory`Side; ({x = `other} ;{x=`s});`quantPxqtlss]);
+   : {`table`win`prefix`funele!x} each raze (`executed,/: wjwins,'prefix) ,/:\: enlist each funcs ;};
+
+sumActive:{[RootId;activeQty;cumQty]
+if[0=count RootId;:0];
+:{sum ?[x>0;x;0]} value last each (activeQty - cumQty) group RootId;};
+
+sumAllLifeQty:{[RootId;activeQty;cumQty]
+if[0=count RootId;:0];
+:{sum ?[x>0;x;0]} value last each ?[activeQty<cumQty;cumQty;activeQty] group RootId;};
+
+// maybe could think about strategy ~~ certain strategy is more impactful e.g. Tap
+
+getActiveFutureQty:{
+      funcs: (enlist applyfwjafterconstrain[sumActive ;`RootId`activeQty`cumQty; `accategory`Side`StratType; ({x = `other} ;{x=`b};{not x = 12});`futstratqtyadvb]),
+          (enlist applyfwjafterconstrain[sumActive ;`RootId`activeQty`cumQty; `accategory`Side`StratType; ({x = `other} ;{x=`s};{not x = 12});`futstratqtyadvs]);
+       :{`table`win`prefix`funele!x} each (`all; 0W;`) ,/: enlist each funcs };
+
+getActiveSSQty:{
+      funcs: (enlist applyfwjafterconstrain[sumActive ;`RootId`activeQty`cumQty; `accategory`Side`OrigGroup; ({x = `other} ;{x=`b};{x like "*SS*"});`futss_stratqtyadvb]),
+             (enlist applyfwjafterconstrain[sumActive ;`RootId`activeQty`cumQty; `accategory`Side`OrigGroup; ({x = `other} ;{x=`s};{x like "*SS*"});`futss_stratqtyadvs]);
+       :{`table`win`prefix`funele!x} each (`all; 0W;`) ,/: enlist each funcs };
+ 
+
