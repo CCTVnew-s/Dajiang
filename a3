@@ -1,0 +1,123 @@
+wjtables: getExecAcgroupBasicFeature1[`tier1;(20;40;60;0W);`tier1], 
+          getExecAcgroupBasicFeature1[`tier2;(20;40;60;0W);`tier2], 
+          getExecAcgroupBasicFeature1[`tier3;(20;40;60;0W);`tier3], 
+          getExecAcgroupBasicFeature1[`otherQ;(20;40;60;0W);`otherQ],
+          getExecAcgroupBasicFeature1[`other;(30;60;90;0W);`other], 
+          getExecQtlsQuantNonQuant[(30;60;90;0W);`],  
+          getActiveFutureQty[],getActiveSSQty[],
+               getmarketchildacfeature1[{x=`tier1};enlist 10; `tier1], 
+          getmarketchildacfeature1[{x=`tier2};enlist 10; `tier2],
+               getmarketchildacfeature1[{x in `tier3`otherQ};enlist 10;`remQ],getmarketchildacfeature1[{x=`other};(10;20); `other];
+
+// make it global
+  tgtcrm: `C35831`C31448;
+
+onesym: {[o1;o2;e1;hpro;hpre;tgtframe;wjtables;symx]
+0N!symx;
+o1x: (select time, Account,accategory, event, OrderId, Price, Quantity, Side, StratType, OrigGroup, Destination: VirtualDestination from o1 where sym = symx, not VirtualDestination = `CROSS, not Account in tgtcrm),(select time + 8t, Account,accategory, event, OrderId , Price, Quantity, Side, StratType:12h, OrigGroup:`HPR, Destination:`HPR from hpro where  sym = symx, not Account in tgtcrm) ;
+o1x: update axis:`Parent, RootId: OrderId, activeQty: ?[event=`PendingCancel;0;Quantity] from o1x;
+o1mchild: select time, Account,accategory, event, OrderId, Price, Quantity, Side,StratType:0Nh, OrigGroup:`, axis:`Child, RootId,Destination: VirtualDestination  from o2 where sym = symx, not Account in tgtcrm, VirtualDestination like "*M*";
+o1exec:   (select time, Account,accategory, event, OrderId, Price, Quantity, Side,StratType:0Nh, OrigGroup:`, axis:`Child, RootId,Destination from e1 where sym = symx, not Account in tgtcrm, event = `Executed), (select time + 8t, Account,accategory, event:`Executed, OrderId, Price, Quantity, Side,StratType:12h, OrigGroup:`, axis:`Child,RootId: OrderId ,Destination:`HPR from hpre where sym = symx);
+o1child: o1mchild, o1exec;
+oall: `time xasc o1x, update activeQty: 0Nj from o1child;
+oall: update time: `time$time, cumQty: sums ?[event=`Executed;Quantity;0], fills activeQty, fills StratType, fills OrigGroup by RootId from oall;
+oall: delete from oall where Destination = `CROSS, null activeQty;
+tgtx: select from tgtframe where sym = symx;
+executedtable: select from oall where event = `Executed;
+market: select from oall where (Destination like "*M*") or Destination = `HPR;
+market: update remqty: sums ?[event=`Pending;Quantity;?[event=`Executed;neg Quantity;0]], lifetm: time - first time, OrderQty:first Quantity by OrderId from market;
+tablesource:`all`executed`marketchild!(oall;executedtable;select from market where time >= 09:30:00.000);
+:ApplyWJTable[tgtx;tablesource;wjtables]};
+
+oneday:{[data;wjtables;dailydata]
+    o1:data[0];o2:data[1];e1:data[2];hpro:data[3];hpre:data[4];
+    d: `date$@[first o1;`time];
+    dailyd: select from dailydata where date = d;
+    0N!d;
+   tgtframe: (select sym ,`time$time, Side, Account, OrderId, Price, Quantity from o1 where Account in tgtcrm, event=`Pending), (select sym,`time$time, Side, Account,OrderId, Price, Quantity from hpro where Account in tgtcrm, event=`Pending);
+   symall: exec distinct sym from tgtframe;
+   rtn:  (),/ onesym[o1;o2;e1;hpro;hpre;tgtframe;wjtables;] peach symall;
+   sigfirstpx: select firstprice: first Price by sym, Side from tgtframe where Price>0;
+   if[0 = count rtn;:()];
+:  (rtn lj  `sym xkey delete x from dailyd) lj sigfirstpx};
+
+rtn: oneday[;wjtables;dailydata] each alldata;
+// Need to think about other daily features:  firrst of Day, Previous EOD stats etc
+rtn: (),/rtn;
+// Normalization
+// up to training, whether to train the residual or train total
+colrtn: cols rtn;
+
+advcols: colrtn where colrtn like "*adv*";
+pricecols: colrtn where colrtn like "*price*";
+sidecols: colrtn where colrtn like "*side*";
+pxqtls: colrtn where colrtn like "*Pxqtls*";
+quantitycols: colrtn where colrtn like "*quantity*";
+sigcols:  colrtn where colrtn like "*sig*";
+imblcol :  colrtn where colrtn like "*imbl*";
+
+
+nonfeacols: `date`sym`time`Side`Account`Price`Quantity`close`r0! (`date;`sym;`time;`Side;`Account;`Price;`Quantity;`close;({[x;y;z] ?[x=`b;-1.0+z%y;1.0 - z%y] };`Side;`Price;`close));
+
+// colrtn where not (colrtn in advcols) or (colrtn in pricecols) or (colrtn in sidecols) or (colrtn in sigcols) or (colrtn in pxqtls) or (colrtn in quantitycols)
+
+
+realize: {($;enlist `real;x)};
+advsig: realize each (),/ { (enlist `$(string x),"_overadvsig")! enlist (%;x;`adv) } each advcols;
+pricesig: realize each (),/ { (enlist `$(string x),"_overpricesig")! enlist (%;x;`Price) } each pricecols;
+sidesig: realize each (),/ { (enlist `$(string x),"_isbuysig")! enlist ({?[x=`b;1;0]};x) } each sidecols;
+quantitysig: realize each (),/ { (enlist `$(string x),"_overquantitysig")! enlist (%;x;`Quantity) } each quantitycols; 
+imblsig: realize each { ( {`$(string x),"_imblsig"} each key x    ) !value x   }   {({[x;y] (x-y)%(x+y)};x[0];x[1]) }  each imblcol group {`$-1 _ string x} each imblcol;
+getqtl:{[x;y] $[any null x;:0nf; sum x >= y ]};
+qtlxsig: realize each (),/ { (enlist `$(string x),"_imblsig")! enlist ( (';getqtl);x;`Price) } each pxqtls;
+sigcolsig: realize each sigcols!sigcols;
+
+
+// 04.18 recover
+
+execessmap: (til 3)!(0.003;0.006;0.009);
+getexcesspctb:{[execessmap;prefix]
+               f: {[side;price;close;thrd]
+                  (sum (side = `b) and price>close*1+thrd) % sum (side=`b) };
+               f2: {[side;price;close;quantity;thrd]
+                   sum ?[(side=`b) and price>close*1+thrd;price*quantity;0]};
+               r: {[f;s;p;c;thrd] (f[;;;thrd];s;p;c) }[f;`side;`price;`close;] each value execessmap;
+               r2: {[f;s;p;c;q;thrd] (f[;;;;thrd];s;p;c;q) }[f2;`side;`price;`close;`quantity;] each value execessmap;
+               (`$ raze ((string prefix),"cbecsr";(string prefix),"cbecsn") ,/:\: string key execessmap )! r,r2 };
+getexcesspcts:{[execessmap;prefix]
+               f: {[side;price;close;thrd]
+                  (sum (side <> `b) and price<close*1-thrd) % sum (side<>`b) };
+               f2: {[side;price;close;quantity;thrd]
+                   sum ?[(side<>`b) and price<close*1-thrd;price*quantity;0]};
+               r: {[f;s;p;c;thrd] (f[;;;thrd];s;p;c) }[f;`side;`price;`close;] each value execessmap;
+               r2: {[f;s;p;c;q;thrd] (f[;;;;thrd];s;p;c;q) }[f2;`side;`price;`close;`quantity;] each value execessmap;
+               (`$ raze ((string prefix),"csecsr";(string prefix),"csecsn") ,/:\: string key execessmap )! r,r2 };
+
+
+getx2sig: {
+d: `date$@[first x[0] ;`time];
+exc1: (select `time$time,sym, Account,accategory, StratType, side: Side, quantity: Quantity, price: Price, Destination from x[2] where event=`Executed ), (select `time$time+8t,sym, Account,accategory, StratType:12h, side:Side, quantity:Quantity, price: Price, Destination:`HPR from x[4]);
+symall: exec distinct sym from exc1;
+tbl: ([] datadate:d; sym:symall);
+stats2: select quantity:sum quantity, price: quantity wavg price by accategory, Account, sym, side: side from exc1 where (Destination like "*M*") or (Destination = `HPR); 
+ohlcd: select from dailydata where date = d;
+x2stats2: ?[stats2 lj `sym xkey ohlcd;enlist (=;`accategory;enlist `other);`datadate`sym!`date`sym; getexcesspctb[execessmap;`signonquant],getexcesspcts[execessmap;`signonquant]];
+x2stats3: ?[stats2 lj `sym xkey ohlcd;();`datadate`sym!`date`sym; getexcesspctb[execessmap;`sig],getexcesspcts[execessmap;`sig]];
+x2stats4: ?[(select from exc1 where (Destination like "*M*") or (Destination = `HPR)) lj `sym xkey ohlcd;enlist (=;`accategory;enlist `other);`datadate`sym!`date`sym; getexcesspctb[execessmap;`nonquantnongroupsig],getexcesspcts[execessmap;`nonquantnongroupsig]];
+x2stats5: ?[(select from exc1 where (Destination like "*M*") or (Destination = `HPR)) lj `sym xkey ohlcd;();`datadate`sym!`date`sym; getexcesspctb[execessmap;`nongroupsig],getexcesspcts[execessmap;`nongroupsig]];
+rtn: {x lj y} over (tbl;x2stats2;x2stats3;x2stats4;x2stats5);
+:rtn};
+
+x2sigpair: (),/ getx2sig peach alldata;
+getnextdaymap: {[x2sigpair]:  {x!-1 xprev x}  asc exec distinct datadate from x2sigpair };
+nextdaymap: getnextdaymap[x2sigpair];
+x2sigpair: update date: nextdaymap datadate from x2sigpair;
+x2sigcols: {x where x like "*sig*"} cols x2sigpair;
+x2sigpair:  ?[x2sigpair;();0b;(`date`sym, x2sigcols)!(`date;`sym),realize each x2sigcols];
+// need to join ohlc adv 
+
+parse "delete x from ry"
+
+trainingb: ?[rtn; ((=;`Side;enlist `b);(>;`Price;0)); 0b; nonfeacols,advsig,pricesig, sidesig,quantitysig, imblsig,qtlxsig,sigcolsig];
+trainingb :  (trainingb lj  `date`sym xkey x2sigpair) lj `sym`date xkey ungroup select date, nextcrtn: -1.0 + (-1 xprev close)%close by sym from dailydata;
+.Q.gc[];
