@@ -1,0 +1,64 @@
+// quantity normalized by quantity       
+
+calccxlqtyrate:{[ordid;event;remqty;ordqty]
+   if [0 = count ordid;:0nf];
+   cloc: event = `PendingCancel;
+   if [0 = sum cloc;:0.0];
+   cxlqty: sum first each (remqty where cloc) group (ordid where cloc);
+   allqty: sum first each ordqty group ordid;
+   :cxlqty%allqty};
+
+calccxlcntrate:{[ordid;event]
+   if [0 = count ordid;:0nf];
+   cloc: event = `PendingCancel;
+   if [0 = sum cloc;:0.0];
+   cxlcnt: sum cloc;
+   allcnt: count distinct ordid;
+   :cxlcnt%allcnt};
+
+calcopenqty:{[ordid;event;remqty]
+if [0 = count ordid;:0nf];
+cxlord: distinct ordid where event = `PendingCancel;
+reqtymap: last each remqty group ordid ;
+openqty: sum  @[reqtymap ;(key reqtymap) where (not (key reqtymap) in cxlord)];
+:openqty};
+
+calcopenrate:{[ordid;event;remqty;ordqty]
+if [0 = count ordid;:0nf];
+cxlord: distinct ordid where event = `PendingCancel;
+reqtymap: last each remqty group ordid ;
+openqty: sum  @[reqtymap ;(key reqtymap) where (not (key reqtymap) in cxlord)];
+totalqty: sum last each ordqty group ordid;
+:openqty%totalqty};
+
+calcfillingtm:{[ordid;tm;event]
+if[0 = count ordid; :0nf];
+ordid: ordid where not event = `Pending;
+tm: tm where not event = `Pending;
+: `float$ avg last each tm group ordid};
+
+calcaggressiverate:{[ordid;tm;event]
+if[0 = count ordid; :0nf];
+ordid: ordid where not event = `Pending;
+tm: tm where not event = `Pending;
+selected: tm < 00:05:00.000;
+ordid: ordid where selected;
+tm: tm where selected;
+ft: value first each tm group ordid;
+if[0=count ft;:0nf];
+:(sum ft<1000)%count ft};
+
+getmarketchildacfeature1:{[acgroupfun;wjwins;prefix]
+    funcs: (enlist applyfwjafterconstrain[calccxlqtyrate;`OrderId`event`remqty`OrderQty;`accategory`Side;(acgroupfun;{x=`b});`sigchildcxlrateb]),
+           (enlist applyfwjafterconstrain[calccxlqtyrate;`OrderId`event`remqty`OrderQty;`accategory`Side;(acgroupfun;{x=`s});`sigchildcxlrates]),
+            (enlist applyfwjafterconstrain[calccxlcntrate;`OrderId`event;`accategory`Side;(acgroupfun;{x=`b});`sigchildcxlcntrateb]),
+            (enlist applyfwjafterconstrain[calccxlcntrate;`OrderId`event;`accategory`Side;(acgroupfun;{x=`s});`sigchildcxlcntrates]),
+            (enlist applyfwjafterconstrain[calcopenqty;`OrderId`event`remqty;`accategory`Side;(acgroupfun;{x=`b});`childopenqtyquantityb]),
+            (enlist applyfwjafterconstrain[calcopenqty;`OrderId`event`remqty;`accategory`Side;(acgroupfun;{x=`s});`childopenqtyquantitys]),
+            (enlist applyfwjafterconstrain[calcopenrate;`OrderId`event`remqty`OrderQty;`accategory`Side;(acgroupfun;{x=`b});`sigchildopenrtb]),
+            (enlist applyfwjafterconstrain[calcopenrate;`OrderId`event`remqty`OrderQty;`accategory`Side;(acgroupfun;{x=`s});`sigchildopenrts]),
+            (enlist applyfwjafterconstrain[calcfillingtm;`OrderId`lifetm`event;`accategory`Side;(acgroupfun;{x=`b});`sigchildfillingtmb]),
+            (enlist applyfwjafterconstrain[calcfillingtm;`OrderId`lifetm`event;`accategory`Side;(acgroupfun;{x=`s});`sigchildfillingtms]),
+            (enlist applyfwjafterconstrain[calcaggressiverate;`OrderId`lifetm`event;`accategory`Side;(acgroupfun;{x=`b});`sigchildaggrateb]),
+            (enlist applyfwjafterconstrain[calcaggressiverate;`OrderId`lifetm`event;`accategory`Side;(acgroupfun;{x=`s});`sigchildaggrates]);
+             :{`table`win`prefix`funele!x} each raze (`marketchild,/: wjwins,'prefix) ,/:\: enlist each funcs ;};
