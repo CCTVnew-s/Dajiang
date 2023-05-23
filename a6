@@ -1,0 +1,320 @@
+sameric: { `$@[string x;til 6]};
+readdaily:{
+dailysource: system "ls /data2/dailydata";
+rtn: (),/ { ("ISDFFFFFFFFFF";enlist ",") 0: `$":/data2/dailydata/",x} each dailysource;
+:rtn};
+dailydata: readdaily[];
+dailydata: update sym: sameric each ts_code from dailydata;
+dailydata: update date: trade_date, adv: 1 xprev 20 mavg vol by sym from dailydata;
+update adjnextclose: -1 xprev close by sym from `dailydata;
+
+crmpath: `:/data2/crmmap.csv;
+crmmap:("SS";enlist ",") 0:crmpath;
+
+Qcrms: `C30572`C31448`C32042`C32172`C35766`C35831`C35848`C36022`C36146`C36379`C36384`C36477`C36580`C36627`C36835`C37198`C37208`C37434`C37435`C37512`C37666`C37667`C37669`C37849`C37858`C37859`C40120`C42839`C43244;
+l1crm: `C35831`C31448`C35766;
+l2crm: `C43244`C32042`C36022;
+l3crm: `C30572`C36835``C35848`C36477`C37849`C37669`C37512`C36580;
+accountmap:()!();
+accountmap[`tier1]: l1crm;
+accountmap[`tier2]: l2crm;
+accountmap[`tier3]: l3crm;
+accountmap[`otherQ]: Qcrms where not Qcrms in l1crm,l2crm,l3crm;
+reverseaccountmap: (()!()) ,/ {[k;m] m[k]!(count m[k])#k}[;accountmap] each key accountmap;
+
+files:  "/data2/cdata2copy";
+gettgt:{[p]
+    files: system "ls ",p;
+    files: distinct ssr[;"#";""] each files;
+    :files;
+ };
+tgt: gettgt[files];
+tgt: tgt where (tgt like "*2021*") or (tgt like "*2022*") or (tgt like "*2023*");
+getdata: {[f;files]
+      0N!f;      datax: get `$ ":", files,"/",f;
+      o1: datax[0]; o2: datax[1];       e1: datax[2];       extrao: datax[6];       hpro: datax[7];       hpre: datax[8];
+     allsym: distinct  (distinct o1`RIC),   (distinct hpro`RIC);
+     mapd: {x ! sameric each x} allsym;
+     o1: update sym: mapd RIC, Side: ?[Side="1";`b;`s], accategory: `other ^ reverseaccountmap Account from o1;
+    hpro: update sym:mapd RIC, Side: ?[Side="1";`b;`s], accategory: `other ^ reverseaccountmap Account from hpro;
+    hpre: hpre lj `OrderId xkey select OrderId, Account, accategory, Account, Side, sym from hpro;
+    r1: select OrderId, RootId: OrderId, nextParent: -1 , level:0 from o1;
+   r2: select OrderId, RootId: OrderId, nextParent: ParentId, level:1 from o2;
+   parentrela: (exec OrderId!ParentId from o1), (exec OrderId!ParentId from o2);
+   while[ not 0 = exec sum nextParent <> -1 from r2 ;
+   r2: update RootId: parentrela RootId, nextParent: parentrela nextParent,level: level + 1 from r2 where not nextParent = -1];
+   o2: o2 lj `OrderId xkey select OrderId, RootId, level from r2;
+   o2: o2 lj `RootId xkey select RootId:OrderId, sym, Side, StratType, Account,accategory from o1;
+   e1: e1 lj `OrderId xkey select sym, Account,accategory, Side, StratType, RootId, OrderId from o2;
+   e1: e1 lj `OrderId xkey select sym, Account,accategory, Side, StratType, RootId:OrderId, OrderId from o1;
+    :(o1;o2;e1;hpro;hpre;extrao);
+  };
+alldata: getdata[;files] each tgt;
+.Q.gc[];
+// feature naming conventions  
+// directly into signal --> with sig
+// easy ones 1) single normalizations, by price, by adv
+// hard ones 2) imbalance -- need buy vs sell per X
+// also  3) if one feature want to be normalized in multiple ways
+//  any special normalizationfunction, need a feature name
+
+
+trainingb2: ?[rtn; ((=;`Side;enlist `b);(>;`Price;0)); 0b; nonfeacols,advsig,pricesig, sidesig,quantitysig, imblsig,qtlxsig,sigcolsig];
+trainingb2 :  (trainingb lj  `date`sym xkey x2sigpair) lj `sym`date xkey ungroup select date, nextcrtn: -1.0 + (-1 xprev close)%close by sym from dailydata;
+.Q.gc[];
+// set up different trainning target , backtesting period etc.
+// better save 
+save `$":/data2/trainingb2.csv";
+
+
+
+
+
+
+// training 
+p)import sys
+p)sys.path.append('/home/zheshi/workspace/signalQ/researchq')
+p)from qpyexports import * 
+p)from pyq import q
+p)import qlgb
+\l /home/zheshi/workspace/signalQ/researchq/loadqlgb.q
+p)from pyqutils import *
+
+// fff
+
+
+
+load `$":/data2/trainingb2.csv";
+load `$":/data2/trainings.csv";
+
+
+colsx: first system "head -1 /data2/trainingb2.csv"
+`$"," vs colsx
+readcol: "DSTSSFFFF",432#"F";
+trainingb: (readcol; enlist ",") 0:`$":/data2/trainingb2.csv";
+trainings: (readcol; enlist ",") 0:`$":/data2/trainings.csv";
+
+
+// Final CV score: 0.019188156928888898 for param{'featuresubset': 0, 'lambda_l2': 0.5596850371702613, 'learning_rate': 0.010140637720495803, 'max_depth': 43, 'min_data_in_leaf': 508, 'nround': 54, 'num_leaves': 10, 'predictresidual': 1}
+
+
+trainmodel_cachedf:{[mdparam;mdname;lgbround;df;featurecachename;tgtcachename;trainsplit;rtncol]
+            $[1h <> type trainsplit[0]; trainidx: ?[df;();0b; (enlist `x)! enlist (trainsplit[0])]`x;trainidx:trainsplit[0]];
+            $[1h <> type trainsplit[1]; testidx: ?[df;();0b ; (enlist `x)! enlist trainsplit[1]]`x; testidx:trainsplit[1]];
+
+            trainx: (featurecachename;trainidx);
+            trainy: (tgtcachename;trainidx);
+            testx: (featurecachename;testidx);
+            testy: (tgtcachename;testidx);
+            .lgb.train(mdparam;mdname;trainx;trainy;lgbround; enlist testx  ;enlist testy);
+            predtesty: .lgb.predict(mdname;testx);
+            predtrainy: .lgb.predict(mdname;trainx);
+            :( flip (enlist rtncol)  !enlist predtrainy;flip (enlist rtncol)  !enlist predtesty)};
+
+
+
+SPLITdate: 2022.04.01;
+project:{[x;y] (sum x * y )%sum x*x};
+k1: exec project[  log Quantity*Price; (log 1 + r0) ] from trainingb where Account = `C35831, date < SPLITdate;
+k2: exec project[  log Quantity*Price; (log 1 + r0) ] from trainingb where Account = `C31448, date < SPLITdate;
+trainingb: update logresirtn: (log 1+r0) - (log Quantity*Price) * ?[Account = `C35831;k1;k2] from trainingb;
+predcols: {x where x like "*sig*"} cols trainingb;
+trainingb: update siglognotion: log Quantity*Price from trainingb;
+r1: select from trainingb where Account = `C35831, not null r0;
+r2: select from trainingb where Account = `C31448, not null r0;
+
+
+.pytutil.cachedf(`r1x; ?[r1;enlist((=;`Account;enlist `C35831));0b;predcols!predcols]);
+.pytutil.cachedf(`r2x; ?[r2;((=;`Account;enlist `C31448);({not null x};`r0));0b;predcols!predcols]);
+.pytutil.cachedf(`r1y1;?[r1;enlist((=;`Account;enlist `C35831));0b;(enlist `logresirtn)!(enlist `logresirtn)]);
+.pytutil.cachedf(`r2y1;?[r2;((=;`Account;enlist `C31448);({not null x};`r0));0b;(enlist `logresirtn)!(enlist `logresirtn)]);
+.pytutil.cachedf(`r1y2;?[r1;enlist((=;`Account;enlist `C35831));0b;(enlist `logrtn)!(enlist (log;(+;1;`r0)))]);
+.pytutil.cachedf(`r2y2;?[r2;((=;`Account;enlist `C31448);({not null x};`r0));0b;(enlist `logrtn)!(enlist (log;(+;1;`r0)))]);
+.pytutil.cachedf(`r1y3;?[r1;enlist((=;`Account;enlist `C35831));0b;(enlist `logrtn)!(enlist (log;(+;1;`nextcrtn)))]);
+.pytutil.cachedf(`r2y3;?[r2;enlist((=;`Account;enlist `C31448));0b;(enlist `logrtn)!(enlist (log;(+;1;`nextcrtn)))]);
+.pytutil.cachedf(`r1y3;?[r1;enlist((=;`Account;enlist `C35831));0b;(enlist `logrtn)!(enlist (log;(+;1;`nextcrtn)))]);
+
+
+
+{'featuresubset': 0, 'lambda_l2': 0.8760741251926409, 'learning_rate': 0.009613400313486386, 'max_depth': 46, 'min_data_in_leaf': 250, 'nround': 15, 'num_leaves': 12, 'predictresidual': 0}
+{'objective': 'regression', 'verbose': 2, 'device': 'cpu', 'metric': 'rmse', 'num_thread': 30, 'force_row_wise': True, 'deterministic': True, 'featuresubset': 0, 'lambda_l2': 0.8760741251926409, 'learning_rate': 0.009613400313486386, 'max_depth': 46, 'min_data_in_leaf': 250, 'nround': 15, 'num_leaves': 1200, 'predictresidual': 0}
+
+
+
+.pytutil.cachedf(`r3x; ?[trainingb;enlist(({not null x};`r0));0b;predcols!predcols]);
+//.pytutil.cachedf(`r3y1;?[trainingb;enlist(({not null x};`r0));0b;(enlist `logresirtn)!(enlist `logresirtn)]);
+.pytutil.cachedf(`r3y2;?[trainingb;enlist(({not null x};`r0));0b;(enlist `logrtn)!(enlist (log;(+;1;`r0)))]);
+r3: select from trainingb where not null r0;
+
+
+//    trainings: (readcol; enlist ",") 0:`$":/data2/trainings.csv";
+//    predcols: {x where x like "*sig*"} cols trainings;
+    trainings: update siglognotion: log Quantity*close, signotion: Quantity*Price from trainings;
+    .pytutil.cachedf(`r4x; ?[trainings;enlist(({not null x};`r0));0b;predcols!predcols]);
+    .pytutil.cachedf(`r4y2;?[trainings;enlist(({not null x};`r0));0b;(enlist `logrtn)!(enlist (log;(+;1;`r0)))]);
+    r4: select from trainings where not null r0;
+    
+    
+    splittraintestbydate:{[d] ((<;`date;d);(>=;`date; d)) };
+    origcol:  `date`time`sym`Side`Quantity`Price`nextcrtn`r0`Account;    
+
+    mdparam3: (`verbose`metric`num_threads`objective`device_type!(2;`rmse;15;`regression;`CPU)) ,`learning_rate`max_depth`num_leaves`lambda_l2`min_data_in_leaf`max_bin`force_row_wise`deterministic!(0.005591;24;1000; 0.627160250528636 ;500;255;1b;1b);
+     fit33: trainmodel_cachedf[mdparam3;`m33;37;r3;`r3x;`r3y2;splittraintestbydate[2022.10.01];`logrtn];
+     fit34: trainmodel_cachedf[mdparam3;`m34;37;r4;`r4x;`r4y2;splittraintestbydate[2022.10.01];`logrtn];
+     new33: (?[r3;enlist splittraintestbydate[2022.10.01][0];0b; (origcol!origcol),(flip fit33[0])]),(?[r3;enlist splittraintestbydate[2022.10.01][1];0b; (origcol!origcol),(flip fit33[1])]);
+      new34: (?[r4;enlist splittraintestbydate[2022.10.01][0];0b; (origcol!origcol),(flip fit34[0])]),(?[r4;enlist splittraintestbydate[2022.10.01][1];0b; (origcol!origcol),(flip fit34[1])]);
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg nextcrtn, count Quantity ,notion: sum Quantity*Price by logrtn > 0.0025 from new33 where date  > 2022.10.01
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg 1, count Quantity ,notion: sum Quantity*Price by logrtn > 0.0012 from new34 where date  > 2022.10.01
+new34: update origQuantity:Quantity from new34
+new34:  Quantity: ?[logrtn>0.0012;2*origQuantity;?[logrtn>0.0008;1.5*origQuantity;origQuantity]] from new34
+
+
+new33: (?[r3;enlist splittraintestbydate[2022.04.01][0];0b; (origcol!origcol),(flip fit33[0])]),(?[r3;enlist splittraintestbydate[2022.04.01][1];0b; (origcol!origcol),(flip fit33[1])]);
+new33: update predlogrtn1: logresirtn +  ?[Account = `C35831;k1;k2] * log Quantity*Price from new33;
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg nextcrtn, count Quantity ,notion: sum Quantity*Price by predlogrtn1 > -2, 1 from new33 where date  > 2022.04.01
+
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg nextcrtn, count Quantity ,notion: sum Quantity*Price by logrtn > 0.0027, Account from new34 where date  > 2022.10.01
+
+
+
+
+
+// Final CV score: 0.019188156928888898 for param{'featuresubset': 0, 'lambda_l2': 0.5596850371702613, 'learning_rate': 0.010140637720495803, 'max_depth': 43, 'min_data_in_leaf': 508, 'nround': 54, 'num_leaves': 10, 'predictresidual': 1}
+
+mdparam: (`verbose`metric`num_threads`objective`device_type!(2;`rmse;30;`regression;`CPU)) ,`learning_rate`max_depth`num_leaves`lambda_l2`min_data_in_leaf`max_bin`force_row_wise`deterministic!(0.02;40;1000;0;300;255;1b;1b);
+fit1: trainmodel_cachedf[mdparam;`m100_10_l1;20;r1;`r1x;`r1y1;splittraintestbydate[2022.04.01];`logresirtn];
+z: (?[r1;enlist splittraintestbydate[2022.04.01][0];0b; (origcol!origcol),(flip fit1[0])]),(?[r1;enlist splittraintestbydate[2022.04.01][1];0b; (origcol!origcol),(flip fit1[1])]);
+z: update predlogrtn1: logresirtn +  k1 * log Quantity*Price from z;
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg nextcrtn, count Quantity ,notion: sum Quantity*Price by predlogrtn1 > 0.0025 from z where date  > 2022.04.01
+
+
+mdparam: (`verbose`metric`num_threads`objective`device_type!(2;`rmse;30;`regression;`CPU)) ,`learning_rate`max_depth`num_leaves`lambda_l2`min_data_in_leaf`max_bin!(0.02;40;1000;0;300;255);
+fit2: trainmodel_cachedf[mdparam;`m100_10_l1;40;r1;`r1x;`r1y2;splittraintestbydate[2022.04.01];`logrtn];
+z2: (?[r1;enlist splittraintestbydate[2022.04.01][0];0b; (origcol!origcol),(flip fit2[0])]),(?[r1;enlist splittraintestbydate[2022.04.01][1];0b; (origcol!origcol),(flip fit2[1])]);
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg nextcrtn, count Quantity ,notion: sum Quantity*Price by logrtn > 0.0025 from z2 where date  > 2022.04.01
+
+
+select from trainingb where null date
+
+
+fit5: trainmodel_cachedf[mdparam;`m100_10_l1_5;20;r1;`r1x;`r1y3;splittraintestbydate[2022.04.01];`lognextrtn];
+z2: z2 ,' fit5[0],fit5[1];
+
+select avg n by `year$date from select n: sum Quantity*Price by date  from r2
+
+
+
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg nextcrtn, count Quantity ,notion: sum Quantity*Price by logrtn > 0.0020 from z2 where date  > 2022.04.01
+
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg nextcrtn, count Quantity ,notion: sum Quantity*Price by lognextrtn > 0.000 from z2 where date  > 2022.04.01
+
+
+
+mdparam2: (`verbose`metric`num_threads`objective`device_type!(2;`rmse;30;`regression;`GPU)) ,`learning_rate`max_depth`num_leaves`lambda_l2`min_data_in_leaf!(0.02;40;1000;0;300);
+mdparam: (`verbose`metric`num_threads`objective`device_type!(2;`rmse;30;`regression;`GPU)) ,`learning_rate`max_depth`num_leaves`lambda_l2`min_data_in_leaf!(0.01;40;1000;0;300);
+
+
+mdparam2: (`verbose`metric`num_threads`objective`device_type!(2;`rmse;30;`regression;`CPU)) ,`learning_rate`max_depth`num_leaves`lambda_l2`min_data_in_leaf`max_bin`force_row_wise`deterministic!(0.02;40;1000;0;300;255;1b;1b);
+fit3: trainmodel_cachedf[mdparam2;`m100_10_l2;20;r2;`r2x;`r2y1;splittraintestbydate[2022.04.01];`logresirtn];
+w: (?[r2;enlist splittraintestbydate[2022.04.01][0];0b; (origcol!origcol),(flip fit3[0])]),(?[r2;enlist splittraintestbydate[2022.04.01][1];0b; (origcol!origcol),(flip fit3[1])]);
+w: update predlogrtn1: logresirtn +  k2 * log Quantity*Price from w;
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg nextcrtn, count Quantity ,notion: sum Quantity*Price by predlogrtn1 > 0.0042 from w where date  > 2022.04.01
+
+
+
+
+
+mdparam2: (`verbose`metric`num_threads`objective`device_type!(2;`rmse;30;`regression;`CPU)) ,`learning_rate`max_depth`num_leaves`lambda_l2`min_data_in_leaf`max_bin!(0.02;40;1000;0;300;255);
+fit4: trainmodel_cachedf[mdparam2;`m100_10_l2_2;40;r2;`r2x;`r2y2;splittraintestbydate[2022.04.01];`logrtn];
+w2: (?[r2;enlist splittraintestbydate[2022.04.01][0];0b; (origcol!origcol),(flip fit4[0])]),(?[r2;enlist splittraintestbydate[2022.04.01][1];0b; (origcol!origcol),(flip fit4[1])]);
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg nextcrtn, count Quantity ,notion: sum Quantity*Price by logrtn > 0.0037   from w2 where date  > 2022.04.01
+
+
+fit6: trainmodel_cachedf[mdparam2;`m100_10_l2_6;20;r2;`r2x;`r2y3;splittraintestbydate[2022.04.01];`lognextrtn];
+
+
+count fit3[0],fit3[1]
+
+
+w2: w2 ,' fit6[0],fit6[1];
+w: w ,' fit6[0],fit6[1];
+
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg nextcrtn, count Quantity ,notion: sum Quantity*Price by logrtn > 0.003   from w2 where date  > 2022.04.01
+
+
+
+
+
+select (Quantity * Price) wavg r0,(Quantity * Price) wavg nextcrtn, count Quantity ,notion: sum Quantity*Price by lognextrtn > 0.00   from w where date  > 2022.04.01
+
+
+samplerule: `ratio`initialstep`normalstep`useratio ! (0.13;1e4;5e3;1b);
+porfoliocontrol: `expectscale`ScaleUB`singlestocklimit`quicktest`BSbalancecontrol`balancecontrollimit`maxinventorydate`porfoliobuildperiod!(4.0e7;4.4e7;0.03;0b;0b;0.3;7;2);
+signalconfig:`c1notion`c1tgt`c2notion`c2tgt`mvdays!(20e7;`logrtn;1e5;`logrtn;10);
+sell: select date, time:`time$time, Account, sym, Side, Price, Quantity from trainings ;
+
+
+test1: TestPortfolioJoin2[new33;new33;new34;dailydata;samplerule;porfoliocontrol;signalconfig;(2022.10.01;2023.03.24)];
+
+select avg n from  select n: sum EODQuantity*close by date from test1[0][0]
+
+select sum notio from test1[1][0]
+
+test1[1][0]
+
+
+
+test12: TestPortfolioJoin2[new33;new33;new34;dailydata;samplerule;porfoliocontrol;;(2022.04.01;2023.03.24)] peach (`c1notion`c1tgt`c2notion`c2tgt`mvdays!(13e7;`logrtn;1e5;`logrtn;10);`c1notion`c1tgt`c2notion`c2tgt`mvdays!(15e7;`logrtn;1e5;`logrtn;10);`c1notion`c1tgt`c2notion`c2tgt`mvdays!(17e7;`logrtn;1e5;`logrtn;10);`c1notion`c1tgt`c2notion`c2tgt`mvdays!(18e7;`logrtn;1e5;`logrtn;10);`c1notion`c1tgt`c2notion`c2tgt`mvdays!(19e7;`logrtn;1e5;`logrtn;10);`c1notion`c1tgt`c2notion`c2tgt`mvdays!(20e7;`logrtn;1e5;`logrtn;10))
+
+
+(),/ {x[1][0]} each test12
+
+
+{select avg n from select n: sum EODQuantity*close by date from x[0][0]} each test12
+
+label: (select c2:1b by date, sym, Side from trainingb where Account = `C31448),(select c2:1b by date, sym, Side from trainings where Account = `C31448);
+
+(),/ { select n1:sum ?[not c2; Quantity*Price;0], n2: sum ?[ c2; Quantity*Price;0]  from x[0][1]  lj label} each test12
+
+
+select  sum EODQuantity*close*alpha from test12[5][0][0]
+
+
+cp1: (select (Quantity*Price) wavg trdrtn by `month$date from test1[0][1]) lj select (Quantity*Price) wavg r0 by `month$date from ((select date, Quantity,Price, r0 from r3),(select date, Quantity,Price, r0 from r4))
+
+cp1
+
+
+1000#update tgtrtn: logrtn + ix *  0.1 * lognextrtn from z2
+
+testcombine:{[ix]
+z2i: update tgtrtn: logrtn + ix *0.1*lognextrtn from z2;
+wi:  update tgtrtn: predlogrtn1 + ix*0.1*lognextrtn  from w;
+porfoliocontrol: `expectscale`ScaleUB`singlestocklimit`quicktest`BSbalancecontrol`balancecontrollimit`maxinventorydate`porfoliobuildperiod!(2.5e7;4.5e7;0.03;0b;0b;0.3;2;5);
+signalconfig:`c1notion`c1tgt`c2notion`c2tgt`mvdays!(14e7;`tgtrtn;7e7;`tgtrtn;10);
+test1: TestPortfolioJoin2[z2i;wi;sell;dailydata;samplerule;porfoliocontrol;signalconfig;(2022.04.01;2023.03.24)];
+:test1};
+
+
+evaluatex:{n1: select avg n from select n: sum EODQuantity*close by date from x[0][0];
+p:select profit:  sum (Quantity*Price)*(trdrtn - ?[Side=`b;0.00015;0.00115] + ?[purpose=`n;0.00065;0.0] ) from x[0][1] ;
+prtn: update realtradertn: profit%n from  n1,'p;
+prtn ,' x[1][0]};
+
+select dev logrtn, avg logrtn ,dev lognextrtn, avg lognextrtn from z2 where date>2022.04.01
+
+test3: testcombine peach (0;0.5;0.7;1.0;1.5;2.0;3.0;4.0;5.0)
+(),/ evaluatex each test3
+
+(),/ evaluatex each test2
+
+test1
+
+{n1: select avg n from select n: sum EODQuantity*close by date from x[0][0];
+p:select profit:  sum (Quantity*Price)*(trdrtn - ?[Side=`b;0.00015;0.00115] + ?[purpose=`n;0.00065;0.0] ) from x[0][1] ;
+update rtn: profit%n from  n1,'p}test1
+
+
+
+select avg n from select n: sum EODQuantity*close by date from test2[2][0][0]
+
