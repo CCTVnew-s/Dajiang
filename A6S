@@ -1,0 +1,17 @@
+{'featuresubset': 0.0,
+ 'lambda_l2 ': 0.15941138179142525,
+ 'learning_rate': 0.009547507354055943,
+ 'max_depth': 38.0,
+ 'min_data_in_leaf': 599.0,
+ 'nround': 32.0,
+ 'num_leaves': 7.0,
+ 'predictresidual': 0.0})
+
+{'featuresubset': 0,
+ 'lambda_l2 ': 0.627160250528636,
+ 'learning_rate': 0.005591491235905967,
+ 'max_depth': 24.0,
+ 'min_data_in_leaf': 278.0,
+ 'nround': 36.0,
+ 'num_leaves': 14.0,
+ 'predictresidual': 0.0}
